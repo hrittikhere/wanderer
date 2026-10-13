@@ -25,11 +25,73 @@ describe('validateTalks', () => {
     assert.deepEqual(result.talks[0], input);
   });
 
+  test('never mutates or aliases nested input objects, even when the input is deeply frozen', () => {
+    const deepFreeze = <T,>(value: T): T => {
+      if (value && typeof value === 'object') { Object.values(value).forEach(deepFreeze); Object.freeze(value); }
+      return value;
+    };
+    const input = deepFreeze(talk({
+      id: 'frozen', location: { city: 'Lisbon', country: 'Portugal' }, coordinates: [1, 2], tags: ['a', 'b'],
+      links: [{ kind: 'general', url: 'https://x.test', id: 'notes', label: 'Notes' }, { kind: 'general', url: 'https://y.test', id: 'event' }],
+    }));
+    const snapshot = JSON.stringify(input);
+    const result = validateTalks([input], { mode: 'lenient' });
+    assert.equal(JSON.stringify(input), snapshot, 'the source is unchanged');
+    const [out] = result.talks;
+    assert.notEqual(out.location, input.location);
+    assert.notEqual(out.coordinates, input.coordinates);
+    assert.notEqual(out.links, input.links);
+    assert.notEqual(out.links![0], input.links![0]);
+    assert.notEqual(out.links![1], input.links![1]);
+    assert.notEqual(out.tags, input.tags);
+    assert.deepEqual(out.links![1], { kind: 'general', url: 'https://y.test' }, 'the reserved id is dropped from the copy only');
+  });
+
+  test('keys outside the Talk schema are dropped from the projection without a diagnostic', () => {
+    const input = { ...talk({ id: 'extra' }), category: 'keynote', readTime: 5, image: '/x.jpg' };
+    for (const mode of ['strict', 'lenient'] as const) {
+      const result = validateTalks([input], { mode });
+      assert.deepEqual(Object.keys(result.talks[0]).sort(), ['date', 'description', 'event', 'format', 'id', 'title'], mode);
+      assert.deepEqual(result.warnings, [], mode);
+      assert.equal(result.valid, true, mode);
+    }
+    assert.equal(input.category, 'keynote', 'the source keeps its own fields');
+  });
+
   test('missing id, title, or event are errors and the entry is dropped even in lenient mode', () => {
     const result = validateTalks([{ title: 'No id', event: 'E' }, { id: 'x', event: 'E' }, { id: 'y', title: '  ' }], { mode: 'lenient' });
     assert.deepEqual(codes(result.errors).sort(), ['event:required', 'id:required', 'title:required', 'title:required'].sort());
     assert.deepEqual(result.talks, []);
     assert.equal(result.valid, false);
+  });
+
+  test('a present but non-string id, title, or event is a required error', () => {
+    const result = validateTalks([talk({ id: 2024 as never }), talk({ id: 'b', title: 42 as never }), talk({ id: 'c', event: ['E'] as never })], { mode: 'lenient' });
+    assert.deepEqual(codes(result.errors), ['id:required', 'title:required', 'event:required']);
+    assert.match(result.errors[0].message, /string/);
+    assert.deepEqual(result.talks, []);
+  });
+
+  test('non-object entries are three required errors each and never become talks', () => {
+    const result = validateTalks([null, 'str', ['x'], 42], { mode: 'lenient' });
+    assert.deepEqual(result.errors.map((item) => `${item.index}:${item.field}:${item.code}`), [0, 1, 2, 3].flatMap((index) => [
+      `${index}:id:required`, `${index}:title:required`, `${index}:event:required`,
+    ]));
+    assert.deepEqual(result.talks, []);
+  });
+
+  test('array holes are diagnosed like explicit undefined entries instead of being skipped', () => {
+    const sparse: unknown[] = [talk({ id: 'a' })];
+    sparse[2] = talk({ id: 'c' });
+    const result = validateTalks(sparse);
+    assert.equal(result.valid, false, 'strict mode rejects the hole');
+    assert.deepEqual(result.errors.map((item) => `${item.index}:${item.field}:${item.code}`), ['1:id:required', '1:title:required', '1:event:required']);
+    assert.equal(validateTalks(new Array(2)).valid, false);
+    const links: unknown[] = [];
+    links[1] = { kind: 'general', url: 'https://x.test' };
+    const withHole = validateTalks([talk({ id: 'l', links: links as never })]);
+    assert.deepEqual(codes(withHole.warnings), ['links[0]:invalid_link']);
+    assert.deepEqual(withHole.talks[0].links, [{ kind: 'general', url: 'https://x.test' }]);
   });
 
   test('ids containing whitespace are an error in both modes because they become DOM ids and IDREFs', () => {
@@ -61,6 +123,43 @@ describe('validateTalks', () => {
       ['https://a.test', 'notes'], ['https://b.test', undefined], ['https://c.test', undefined], ['https://d.test', undefined],
       ['https://e.test', undefined], ['https://f.test', undefined], ['https://g.test', 'share'],
     ], 'every link is kept; only the offending ids are dropped');
+  });
+
+  test('a non-string link id is dropped with an invalid_link_id warning and the link is kept', () => {
+    const result = validateTalks([talk({
+      id: 'x',
+      links: [
+        { kind: 'general', url: 'https://a.test', id: 5 as never },
+        { kind: 'general', url: 'https://b.test', id: null as never },
+        { kind: 'general', url: 'https://c.test', id: { value: 'x' } as never },
+      ],
+    })]);
+    assert.equal(result.valid, true);
+    assert.deepEqual(codes(result.warnings), ['links[0].id:invalid_link_id', 'links[1].id:invalid_link_id', 'links[2].id:invalid_link_id']);
+    assert.deepEqual(result.talks[0].links, [
+      { kind: 'general', url: 'https://a.test' }, { kind: 'general', url: 'https://b.test' }, { kind: 'general', url: 'https://c.test' },
+    ]);
+  });
+
+  test('blank or non-string link labels are dropped with an invalid_link_label warning and the link is kept', () => {
+    for (const mode of ['strict', 'lenient'] as const) {
+      const result = validateTalks([talk({
+        id: 'x',
+        links: [
+          { kind: 'general', url: 'https://a.test', label: '' },
+          { kind: 'general', url: 'https://b.test', label: '   ' },
+          { kind: 'general', url: 'https://c.test', label: '\t\n' },
+          { kind: 'general', url: 'https://d.test', label: 7 as never },
+          { kind: 'general', url: 'https://e.test', label: 'Notes' },
+        ],
+      })], { mode });
+      assert.equal(result.valid, true, mode);
+      assert.deepEqual(codes(result.warnings), ['links[0].label:invalid_link_label', 'links[1].label:invalid_link_label', 'links[2].label:invalid_link_label', 'links[3].label:invalid_link_label'], mode);
+      assert.deepEqual(result.talks[0].links!.map((link) => [link.url, link.label]), [
+        ['https://a.test', undefined], ['https://b.test', undefined], ['https://c.test', undefined], ['https://d.test', undefined], ['https://e.test', 'Notes'],
+      ], mode);
+      assert.ok(result.talks[0].links!.slice(0, 4).every((link) => !('label' in link)), mode);
+    }
   });
 
   test('duplicate ids are an error and lenient mode keeps the first occurrence', () => {
@@ -124,6 +223,15 @@ describe('validateTalks', () => {
     assert.deepEqual(out.links, [{ kind: 'general', url: 'https://ok.test/general' }]);
   });
 
+  test('links that is not an array is an invalid_links warning and the field is dropped', () => {
+    for (const links of ['https://x.test', { kind: 'general', url: 'https://x.test' }, 42, null, true]) {
+      const result = validateTalks([talk({ id: 'l', links: links as never })]);
+      assert.equal(result.valid, true, JSON.stringify(links));
+      assert.deepEqual(codes(result.warnings), ['links:invalid_links'], JSON.stringify(links));
+      assert.equal(result.talks[0].links, undefined, JSON.stringify(links));
+    }
+  });
+
   test('javascript: URLs never appear in the output in either mode', () => {
     const input = [talk({
       id: 'js',
@@ -163,9 +271,31 @@ describe('validateTalks', () => {
     assert.equal(result.talks[1].location, undefined);
   });
 
+  test('blank locations are an invalid_location warning and the field is dropped', () => {
+    const result = validateTalks([
+      talk({ id: 'empty', location: '' }),
+      talk({ id: 'spaces', location: '  ' }),
+      talk({ id: 'blank-object', location: { city: ' ', country: '' } }),
+      talk({ id: 'city-only', location: { city: 'Lisbon', country: '' } }),
+      talk({ id: 'padded', location: ' Lisbon ' }),
+    ]);
+    assert.equal(result.valid, true);
+    assert.deepEqual(result.warnings.map((item) => `${item.talkId}:${item.code}`), ['empty:invalid_location', 'spaces:invalid_location', 'blank-object:invalid_location']);
+    assert.deepEqual(result.talks.map((item) => item.location), [undefined, undefined, undefined, { city: 'Lisbon', country: '' }, ' Lisbon ']);
+  });
+
   test('tags keep only strings', () => {
     const result = validateTalks([talk({ id: 't', tags: ['a', 1, null, 'b'] as never })]);
     assert.deepEqual(result.talks[0].tags, ['a', 'b']);
+  });
+
+  test('tags that is not an array is an invalid_tags warning and the field is dropped', () => {
+    for (const tags of ['platforms', { a: 1 }, 42, null, true]) {
+      const result = validateTalks([talk({ id: 't', tags: tags as never })]);
+      assert.equal(result.valid, true, JSON.stringify(tags));
+      assert.deepEqual(codes(result.warnings), ['tags:invalid_tags'], JSON.stringify(tags));
+      assert.equal(result.talks[0].tags, undefined, JSON.stringify(tags));
+    }
   });
 
   test('diagnostics carry the index and talk id', () => {

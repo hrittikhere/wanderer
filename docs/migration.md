@@ -19,8 +19,8 @@ This guide moves data from a hand-rolled `Talk` interface, as found in many pers
 | `externalLink`, `link` | `recordingUrl` or `links[]` | Recording when the host is a known video host; otherwise `links[]` with `kind: 'general'`. |
 | `slides` | `slidesUrl` | As is. |
 | `abstract`, `content` | `detailUrl` | When either is present: `'/talks/<slug>'`. A relative path is allowed for `detail` only. |
-| `tags` | `tags` | Strings only; non-strings are dropped. |
-| `category`, `readTime`, `image`, `organizer`, `speakers`, `seoTitle`, `seoDescription` | not in the schema | Keep them in the site. Render them through a plugin renderer or keep the detail page site-owned. |
+| `tags` | `tags` | An array of strings; non-string entries are dropped. A value that is not an array is dropped with an `invalid_tags` warning. |
+| `category`, `readTime`, `image`, `organizer`, `speakers`, `seoTitle`, `seoDescription` | not in the schema | Keep them in the site. Validation drops them from the talk a renderer receives, so look them up by `talk.id` in a plugin renderer (see [Site-only fields](#site-only-fields)) or keep the detail page site-owned. |
 
 ### Date conversion
 
@@ -58,6 +58,29 @@ See [links.md](links.md) for the full adapter. The rules in short:
 - Any other URL is a recording only when its hostname is `youtube.com`, `youtu.be`, `youtube-nocookie.com`, `vimeo.com` or a subdomain of one. Compare hostnames, not substrings.
 - `eventUrl` keeps its meaning unless it points at a video host.
 - Leftover URLs go into `links[]` as `general` (or `recording` when classified), with the legacy field name as the link `id`. Ambiguous links stay `general`; the library never infers a kind from a URL.
+
+### Site-only fields
+
+`validateTalks` keeps only schema fields, and `<Talks>` validates its `talks` prop, so a field such as `category` never reaches a renderer on `talk`, even when the adapter copies it there. Keep the legacy `TALKS` array as the source and look the extra fields up by id:
+
+```tsx
+import { definePlugin, TalkCard } from '@wanderer/talks';
+
+const legacyById = new Map(TALKS.map((talk) => [talk.slug, talk]));
+
+export const sitePlugin = definePlugin({
+  id: 'site',
+  renderers: [{
+    id: 'site-card',
+    Component: (props) => (
+      <>
+        <TalkCard {...props} />
+        <p className="site-category">{legacyById.get(props.talk.id)?.category}</p>
+      </>
+    ),
+  }],
+});
+```
 
 ### Coordinates resolver
 

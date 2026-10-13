@@ -11,7 +11,7 @@ interface TalkLink {
   id?: string;     // stable id for the action; defaults to `${kind}-${index}`
   kind: LinkKind;
   url: string;
-  label?: string;  // action text; defaults to copy.<kind>Action
+  label?: string;  // action text; a missing or blank label uses copy.<kind>Action
 }
 
 interface Talk {
@@ -69,7 +69,7 @@ Override with `navigation.primaryLink`. A talk with no safe link renders its tit
 
 ## Actions
 
-`context.getActions(talk)` returns the remaining links as actions, in `getTalkLinks` order, excluding the primary link (compared by identity, then by `kind + url`). Each action takes its label from `link.label` or from `copy.eventAction`, `copy.recordingAction`, `copy.slidesAction`, `copy.detailAction` or `copy.generalAction`, and an icon by kind. Plugin actions follow. The built-in card renders actions as a list of pill links or buttons with `aria-label` from `copy.actionLabel(label, title)`.
+`context.getActions(talk)` returns the remaining links as actions, in `getTalkLinks` order, excluding the primary link (compared by identity, then by `kind + url`). Each action takes its label from a nonblank `link.label` or from `copy.eventAction`, `copy.recordingAction`, `copy.slidesAction`, `copy.detailAction` or `copy.generalAction`, and an icon by kind. Plugin actions follow. The built-in card renders actions as a list of pill links or buttons with `aria-label` from `copy.actionLabel(label, title)`.
 
 The `recording` filter and the `recordingOnly` option of `filterTalks` test for any link of kind `recording`, from either the dedicated field or `links[]`.
 

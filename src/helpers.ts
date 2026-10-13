@@ -59,7 +59,10 @@ export function locationLabel(location: Talk['location']): string {
 /** "City, Region, Country" splits on the first and last comma; a bare string is the city. */
 export function locationParts(location: Talk['location']): { city?: string; country?: string } {
   if (!location) return {};
-  if (typeof location !== 'string') return { city: location.city, country: location.country };
+  if (typeof location !== 'string') {
+    const { city, country } = location as { city?: unknown; country?: unknown };
+    return { ...(typeof city === 'string' ? { city } : {}), ...(typeof country === 'string' ? { country } : {}) };
+  }
   const parts = location.split(',').map((part) => part.trim()).filter(Boolean);
   if (parts.length === 0) return {};
   if (parts.length === 1) return { city: parts[0] };
@@ -231,13 +234,14 @@ export function validateTalks(input: unknown, options: ValidationOptions = {}): 
     return { ...result, valid: false, errors: [{ index: -1, field: 'talks', code: 'invalid_type', message: 'Expected an array of talks.' }] };
   }
   const ids = new Set<string>();
-  input.forEach((entry: unknown, index) => {
+  // Array.from turns holes into undefined, so a sparse entry is diagnosed instead of skipped.
+  Array.from(input).forEach((entry: unknown, index) => {
     const source = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry as Record<string, unknown> : {};
     const talkId = typeof source.id === 'string' ? source.id : undefined;
     const error = (field: string, code: string, message: string) => { result.errors.push({ index, talkId, field, code, message }); };
     const warning = (field: string, code: string, message: string) => { result.warnings.push({ index, talkId, field, code, message }); };
     const missingIdentity = ['id', 'title', 'event'].filter((key) => typeof source[key] !== 'string' || !(source[key] as string).trim());
-    for (const key of missingIdentity) error(key, 'required', `A nonempty ${key} is required.`);
+    for (const key of missingIdentity) error(key, 'required', `A nonempty ${key} string is required.`);
     if (missingIdentity.length) return;
     const id = source.id as string;
     // Ids become DOM ids and aria-controls IDREFs, where any whitespace splits the reference.
@@ -254,12 +258,12 @@ export function validateTalks(input: unknown, options: ValidationOptions = {}): 
       description: typeof source.description === 'string' ? source.description : '',
       format: format === 'in-person' || format === 'hybrid' ? format : 'online',
     };
-    if (typeof source.location === 'string') talk.location = source.location;
+    if (typeof source.location === 'string' && source.location.trim()) talk.location = source.location;
     else if (source.location && typeof source.location === 'object') {
       const location = source.location as Record<string, unknown>;
-      if (typeof location.city === 'string' && typeof location.country === 'string') talk.location = { city: location.city, country: location.country };
-      else warning('location', 'invalid_location', 'Expected a string or an object containing city and country strings.');
-    } else if (source.location !== undefined) warning('location', 'invalid_location', 'Expected a string or a city/country object.');
+      if (typeof location.city === 'string' && typeof location.country === 'string' && (location.city.trim() || location.country.trim())) talk.location = { city: location.city, country: location.country };
+      else warning('location', 'invalid_location', 'Expected a string or an object containing city and country strings, not both blank.');
+    } else if (source.location !== undefined) warning('location', 'invalid_location', 'Expected a nonblank string or a city/country object.');
     if (source.coordinates !== undefined) {
       if (validCoordinates(source.coordinates)) talk.coordinates = [...source.coordinates];
       else error('coordinates', 'invalid_coordinates', 'Expected finite latitude [-90, 90] and longitude [-180, 180].');
@@ -274,7 +278,7 @@ export function validateTalks(input: unknown, options: ValidationOptions = {}): 
     if (Array.isArray(source.links)) {
       const links: TalkLink[] = [];
       const linkIds = new Set<string>();
-      source.links.forEach((item: unknown, linkIndex: number) => {
+      Array.from(source.links).forEach((item: unknown, linkIndex: number) => {
         const field = `links[${linkIndex}]`;
         if (!item || typeof item !== 'object') { warning(field, 'invalid_link', 'Expected an object with a link kind and URL.'); return; }
         const link = item as Record<string, unknown>;
@@ -292,13 +296,19 @@ export function validateTalks(input: unknown, options: ValidationOptions = {}): 
           } else {
             linkId = link.id;
           }
+        } else if (link.id !== undefined) {
+          warning(`${field}.id`, 'invalid_link_id', 'Link ids must be strings; the id was dropped.');
         }
         if (linkId !== undefined) linkIds.add(linkId);
-        links.push({ kind, url, ...(linkId !== undefined ? { id: linkId } : {}), ...(typeof link.label === 'string' ? { label: link.label } : {}) });
+        // A blank label would leave an icon-only action whose accessible name has no action text.
+        const label = typeof link.label === 'string' && link.label.trim() ? link.label : undefined;
+        if (label === undefined && link.label !== undefined) warning(`${field}.label`, 'invalid_link_label', 'Link labels must be nonblank strings; the default action label is used.');
+        links.push({ kind, url, ...(linkId !== undefined ? { id: linkId } : {}), ...(label !== undefined ? { label } : {}) });
       });
       talk.links = links;
     }
     if (Array.isArray(source.tags)) talk.tags = source.tags.filter((tag): tag is string => typeof tag === 'string');
+    else if (source.tags !== undefined) warning('tags', 'invalid_tags', 'Expected an array of strings.');
     result.talks.push(talk);
   });
   result.valid = result.errors.length === 0;

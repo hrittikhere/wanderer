@@ -162,6 +162,18 @@ describe('renderToString markup', () => {
     assert.deepEqual(errors, [], 'no console.error (would include duplicate key warnings)');
   });
 
+  test('blank link labels fall back to the default action text and accessible name', () => {
+    const talks = [talk({
+      id: 'blank', title: 'Blank labels', eventUrl: 'https://event.example',
+      links: [{ kind: 'general', url: 'https://a.example', label: '' }, { kind: 'slides', url: 'https://b.example', label: '   ' }],
+    })];
+    const html = renderToString(createElement(Talks, { talks, referenceDate: REFERENCE_DATE }));
+    assert.ok(/aria-label="Link: Blank labels"[^>]*href="https:\/\/a\.example"[^>]*>.*?<span>Link<\/span>/.test(html), 'general action keeps its text');
+    assert.ok(/aria-label="Slides: Blank labels"[^>]*href="https:\/\/b\.example"[^>]*>.*?<span>Slides<\/span>/.test(html), 'slides action keeps its text');
+    assert.equal(/aria-label="\s*:/.test(html), false, 'no action is named only by the talk title');
+    assert.deepEqual(errors, []);
+  });
+
   test('strict validation with errors renders the validationError alert instead of talks', () => {
     const html = renderToString(createElement(Talks, { talks: [talk({ id: 'ok' }), talk({ id: 'bad', date: 'nope' })], referenceDate: REFERENCE_DATE, validation: 'strict' }));
     assert.ok(html.includes('role="alert"'));

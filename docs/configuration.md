@@ -163,7 +163,7 @@ Active filters are applied as predicates on the same pass. The toolbar count use
 Errors (reject in strict mode):
 
 - `talks` is not an array (`invalid_type`).
-- `id`, `title` or `event` missing or blank (`required`). The entry is dropped in both modes.
+- `id`, `title` or `event` missing, not a string, or blank (`required`). The entry is dropped in both modes.
 - Duplicate `id` (`duplicate_id`). Later occurrences are dropped in both modes.
 - `id` containing whitespace (`invalid_id`). The entry is dropped in both modes because ids become DOM ids and IDREFs.
 - `date` not a real `YYYY-MM-DD` calendar date (`invalid_date`). Lenient keeps the talk as undated.
@@ -173,10 +173,14 @@ Errors (reject in strict mode):
 
 Warnings (never reject):
 
-- `location` that is neither a string nor a `{ city, country }` object (`invalid_location`); the field is dropped.
+- `location` that is neither a string nor a `{ city, country }` object, or is blank: an empty or whitespace-only string, or an object whose `city` and `country` are both blank (`invalid_location`); the field is dropped.
 - `eventUrl`, `recordingUrl`, `slidesUrl`, `detailUrl` that is malformed, contains whitespace or control characters, or uses a scheme other than `http`, `https`, `mailto` or `tel` (`invalid_url`); the field is dropped. `detailUrl` may also be a relative path.
-- A `links[].id` that is empty, contains whitespace, reuses a link kind or a generated `kind-n` id, or repeats within the talk (`invalid_link_id`). The id is dropped and the link is kept.
+- A `links[].id` that is not a string, is empty, contains whitespace, reuses a link kind or a generated `kind-n` id, or repeats within the talk (`invalid_link_id`). The id is dropped and the link is kept.
+- A `links[].label` that is not a string or is blank (`invalid_link_label`). The label is dropped, the link is kept, and its action uses `copy.<kind>Action`.
 - `links` not an array (`invalid_links`), an entry that is not an object (`invalid_link`), an unknown `kind` (`invalid_link_kind`), or an unsafe `url` (`invalid_url`); the entry is dropped.
+- `tags` not an array (`invalid_tags`); the field is dropped. Non-string entries inside the array are dropped without a warning.
+
+The result is a projection: keys outside the `Talk` schema (for example `category` or `image`) are dropped without a diagnostic. `<Talks>` validates its `talks` prop, so plugins, renderers and filters only ever see schema fields. Keep site-only data in a map keyed by `id`; see [migration.md](migration.md#site-only-fields).
 
 With `validation="strict"` on the component and any error, the root renders `<section class="wanderer wanderer--error" role="alert">` with `copy.validationError` and nothing else. With `lenient`, the usable talks render and `onValidation` receives the diagnostics.
 

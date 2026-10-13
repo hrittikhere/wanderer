@@ -363,7 +363,7 @@ export function Talks(props: TalksProps) {
       .map((link, index) => ({
         id: uniqueId(link.id ?? `${link.kind}-${index}`),
         kind: link.kind,
-        label: link.label ?? copy[`${link.kind}Action`],
+        label: typeof link.label === 'string' && link.label.trim() ? link.label : copy[`${link.kind}Action`],
         link,
       }));
     const pluginActions: TalkAction[] = registry.actions

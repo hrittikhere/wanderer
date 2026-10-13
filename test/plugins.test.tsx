@@ -164,6 +164,18 @@ describe('plugins through <Talks>', () => {
     assert.equal(section.querySelectorAll('.wanderer-talk').length, FIXTURE_TALKS.length - 1);
   });
 
+  test('context.getActions falls back to the default label when a talk built outside validation has a blank link label', async () => {
+    const labels: string[][] = [];
+    function Probe({ talk, context }: TalkRendererProps) {
+      const raw = { ...talk, links: [{ kind: 'general' as const, url: 'https://raw.example', label: '  ' }, { kind: 'general' as const, url: 'https://named.example', label: 'Notes' }] };
+      labels.push(context.getActions(raw).filter((action) => action.link).map((action) => action.label));
+      return createElement('div', { className: 'probe' }, talk.id);
+    }
+    await render({ talks: [FIXTURE_TALKS[2]], plugins: [definePlugin({ id: 'probe', renderers: [{ id: 'probe', Component: Probe }] })] });
+    assert.ok(labels.length > 0, 'the renderer ran');
+    assert.deepEqual(labels.at(-1), ['Link', 'Notes']);
+  });
+
   test('a renderer that throws is contained by the error boundary and the rest still renders', async () => {
     const errors: unknown[] = [];
     const originalError = console.error;
