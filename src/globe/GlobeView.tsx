@@ -199,9 +199,9 @@ function sortMarkers(markers: readonly GlobeMarker[]): GlobeMarker[] {
   return [...markers].sort((a, b) => b.count - a.count || compareIds(a.id, b.id));
 }
 
-function latestYear(marker: GlobeMarker): string {
-  const year = parseCalendarDate(marker.latestTalk.date)?.getUTCFullYear();
-  return year === undefined ? '' : String(year);
+function latestYear(marker: GlobeMarker, formatDate: TalksContext['formatDate']): string {
+  const { date } = marker.latestTalk;
+  return parseCalendarDate(date) ? formatDate(date, { year: 'numeric' }) : '';
 }
 
 /** Keyboard-accessible equivalent of the canvas: regions, locations, and the talks at each location. */
@@ -259,7 +259,7 @@ export function GlobeRegionList({
                   <div id={panelId} className="wanderer-globe__location-panel" hidden={!open}>
                     <p className="wanderer-globe__location-summary">
                       <span>{copy.locationCount(marker.count)}</span>
-                      {latestYear(marker) && <span>{copy.latest}: {latestYear(marker)}</span>}
+                      {latestYear(marker, context.formatDate) && <span>{copy.latest}: {latestYear(marker, context.formatDate)}</span>}
                     </p>
                     <ul className="wanderer-globe__location-talks">
                       {marker.talks.map((talk) => {

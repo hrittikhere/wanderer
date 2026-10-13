@@ -36,7 +36,7 @@ export function TalkCard({ talk, context, upcoming }: TalkRendererProps) {
       data-wanderer-format={talk.format}
     >
       <div className="wanderer-talk__when" aria-hidden="true">
-        {date ? <span>{monthLabel}</span> : <span>&ndash;</span>}
+        {date ? <span suppressHydrationWarning>{monthLabel}</span> : <span>{copy.undatedMonth}</span>}
       </div>
       <div className="wanderer-talk__body">
         {upcoming && <span className="wanderer-badge wanderer-badge--accent">{copy.upcomingBadge}</span>}
@@ -49,7 +49,7 @@ export function TalkCard({ talk, context, upcoming }: TalkRendererProps) {
         <p className="wanderer-talk__meta">
           <span className="wanderer-talk__meta-item">
             <CalendarIcon className="wanderer-talk__meta-icon" />
-            {date ? <time dateTime={talk.date}>{fullDate}</time> : <span>{fullDate}</span>}
+            {date ? <time dateTime={talk.date} suppressHydrationWarning>{fullDate}</time> : <span>{fullDate}</span>}
           </span>
           {location && (
             <span className="wanderer-talk__meta-item">

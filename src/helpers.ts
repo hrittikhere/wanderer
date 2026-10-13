@@ -22,6 +22,22 @@ export function parseCalendarDate(value: unknown): Date | null {
     && date.getUTCMonth() + 1 === month && date.getUTCDate() === day ? date : null;
 }
 
+const FORMATTER_CACHE_LIMIT = 64;
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+/** Constructing Intl.DateTimeFormat costs far more than formatting, so instances are reused per locale and options. */
+function utcFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale}\u0000${JSON.stringify(options)}`;
+  let formatter = formatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, { ...options, timeZone: 'UTC' });
+    const oldest = formatters.size >= FORMATTER_CACHE_LIMIT ? formatters.keys().next().value : undefined;
+    if (oldest !== undefined) formatters.delete(oldest);
+    formatters.set(key, formatter);
+  }
+  return formatter;
+}
+
 export function formatCalendarDate(
   value: unknown,
   locale = 'en-US',
@@ -29,7 +45,7 @@ export function formatCalendarDate(
   undated = 'Undated',
 ): string {
   const date = parseCalendarDate(value);
-  return date ? new Intl.DateTimeFormat(locale, { ...options, timeZone: 'UTC' }).format(date) : undated;
+  return date ? utcFormatter(locale, options).format(date) : undated;
 }
 
 export function isUpcoming(value: unknown, referenceDate: unknown): boolean {
@@ -40,16 +56,16 @@ export function isUpcoming(value: unknown, referenceDate: unknown): boolean {
 
 /** Valid dates precede undated entries; ties always use ascending ID ordering. */
 export function sortTalks<T extends Talk>(talks: readonly T[], order: 'asc' | 'desc' = 'desc'): T[] {
-  return [...talks].sort((a, b) => {
-    const left = parseCalendarDate(a.date)?.getTime();
-    const right = parseCalendarDate(b.date)?.getTime();
+  // Parse each date once up front; parsing inside the comparator repeats it O(n log n) times.
+  const keyed = talks.map((talk) => ({ talk, time: parseCalendarDate(talk.date)?.getTime() }));
+  return keyed.sort(({ talk: a, time: left }, { talk: b, time: right }) => {
     if (left === undefined && right !== undefined) return 1;
     if (right === undefined && left !== undefined) return -1;
     if (left !== undefined && right !== undefined && left !== right) {
       return order === 'asc' ? left - right : right - left;
     }
     return compareIds(a.id, b.id);
-  });
+  }).map(({ talk }) => talk);
 }
 
 export function locationLabel(location: Talk['location']): string {
@@ -100,6 +116,14 @@ export function filterTalks<T extends Talk>(talks: readonly T[], options: Filter
   });
 }
 
+/** The year, or range of years, that a newest-first group of dated talks spans in the locale's calendar and digits. */
+function localizedYearLabel(entries: readonly Talk[], locale: string): string {
+  const formatter = utcFormatter(locale, { year: 'numeric' });
+  const newest = parseCalendarDate(entries[0].date)!;
+  const oldest = parseCalendarDate(entries[entries.length - 1].date)!;
+  return typeof formatter.formatRange === 'function' ? formatter.formatRange(oldest, newest) : formatter.format(newest);
+}
+
 export function groupTalks(talks: readonly Talk[], options: GroupOptions = {}): TalkGroup[] {
   const upcomingMode = options.upcoming ?? 'separate';
   const upcoming = upcomingMode === 'none' ? [] : sortTalks(
@@ -112,12 +136,15 @@ export function groupTalks(talks: readonly Talk[], options: GroupOptions = {}): 
     const date = parseCalendarDate(talk.date);
     if (!date) { undated.push(talk); continue; }
     const year = String(date.getUTCFullYear());
-    years.set(year, [...(years.get(year) ?? []), talk]);
+    const bucket = years.get(year);
+    if (bucket) bucket.push(talk);
+    else years.set(year, [talk]);
   }
   const groups: TalkGroup[] = [];
   if (upcoming.length) groups.push({ id: 'upcoming', label: options.upcomingLabel ?? 'Upcoming', talks: upcoming });
   for (const [year, entries] of [...years].sort(([a], [b]) => Number(b) - Number(a))) {
-    groups.push({ id: `year-${year}`, label: year, talks: entries });
+    const label = options.locale === undefined ? year : localizedYearLabel(entries, options.locale);
+    groups.push({ id: `year-${year}`, label, talks: entries });
   }
   if (undated.length) groups.push({ id: 'undated', label: options.undatedLabel ?? 'Undated', talks: undated });
   return groups;

@@ -12,7 +12,7 @@ Plugin-based React components and pure helpers for publishing a speaking history
 - Responsive view selection that renders on the server without hydration warnings.
 - Controlled or uncontrolled view, search and filters.
 - Theming through `--wanderer-*` custom properties: light, dark and system palettes, RTL, reduced motion and forced colors.
-- Every visible string and accessible label is replaceable through `copy`.
+- Every visible string and accessible label is replaceable through `copy`; dates, including year headings, follow `locale`.
 - Upcoming grouping uses the `referenceDate` you supply, never the current date. The globe uses an animation clock only.
 
 ## Installation

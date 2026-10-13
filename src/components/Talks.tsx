@@ -307,8 +307,8 @@ export function Talks(props: TalksProps) {
   }, [allTalks, search, filters, activeFilters, referenceDate]);
 
   const groups = useMemo(
-    () => groupTalks(talks, { referenceDate, upcoming: grouping, undatedLabel: copy.undated, upcomingLabel: copy.upcoming }),
-    [talks, referenceDate, grouping, copy],
+    () => groupTalks(talks, { referenceDate, upcoming: grouping, undatedLabel: copy.undated, upcomingLabel: copy.upcoming, locale }),
+    [talks, referenceDate, grouping, copy, locale],
   );
 
   const resolvedGeographyOptions = useMemo(() => ({

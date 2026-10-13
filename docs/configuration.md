@@ -56,7 +56,7 @@ Every option of `<Talks>` from `@wanderer/talks`. Types come from `TalksProps` i
 | Prop | Type | Default | Behavior |
 |---|---|---|---|
 | `copy` | `Partial<TalksCopy>` | `undefined` | Overrides merged over the English defaults. Keys set to `undefined` are ignored. See [Copy](#copy). |
-| `locale` | `string` | `'en-US'` | Passed to `Intl.DateTimeFormat`. |
+| `locale` | `string` | `'en-US'` | Passed to `Intl.DateTimeFormat` for card dates, year group headings and the globe's Latest year. See [Localization](#localization). |
 | `dateFormat` | `Intl.DateTimeFormatOptions` | `{ year: 'numeric', month: 'short', day: 'numeric' }` | Format of the full date on a talk card. Always formatted in UTC. The bare `formatCalendarDate` helper defaults to `month: 'long'` instead. |
 | `direction` | `'ltr' \| 'rtl'` | `'ltr'` | Sets `dir` on the root. Layout uses logical properties. |
 | `theme` | `'light' \| 'dark' \| 'system'` | `'system'` | Sets `data-wanderer-theme` on the root. `system` is light on the server and during hydration. After hydration it follows an ancestor `data-wanderer-scheme` hint when one exists, otherwise `prefers-color-scheme`. See [styling.md](styling.md#dark-mode). |
@@ -111,7 +111,7 @@ Without `responsive`, `defaultView` (or the first view) renders in one shell fro
 
 ## Reference date
 
-- Upcoming classification never reads the current date; only globe animation uses a clock. If you omit `referenceDate`, nothing is upcoming: the Upcoming group and the `upcoming` filter are empty and no badge shows.
+- Upcoming classification never reads the current date; only globe animation uses a clock. If you omit `referenceDate` or pass one that is not a real calendar date, nothing is upcoming: no Upcoming group is produced, the `upcoming` filter matches nothing and no badge shows.
 - A talk dated the same day as `referenceDate` is upcoming. Comparison is on UTC calendar dates.
 - Invalid or missing talk dates are `undated`, never upcoming.
 - `classifyTalkDate(date, referenceDate)` from `@wanderer/talks/helpers` returns `'upcoming' | 'past' | 'undated'` with the same rules.
@@ -134,15 +134,17 @@ The snapshot is taken when the cache entry is filled and refreshes when the entr
 
 ## Grouping modes
 
-`groupTalks` produces groups with ids `upcoming`, `year-YYYY` and `undated`. Group labels come from `copy.upcoming` and `copy.undated`; year groups are labeled with the year.
+`groupTalks` produces groups with ids `upcoming`, `year-YYYY` and `undated`. Group labels come from `copy.upcoming` and `copy.undated`. Year group ids always use the Gregorian year. The component labels year groups with the year formatted in `locale` (see [Localization](#localization)); the bare helper labels them with the Gregorian year number unless you pass its `locale` option.
 
 | Mode | Upcoming group | Year groups |
 |---|---|---|
-| `separate` (default) | Present, sorted ascending by date. | Exclude upcoming talks. |
-| `duplicate` | Present, sorted ascending. | Include upcoming talks as well. |
+| `separate` (default) | Present when at least one talk is upcoming, sorted ascending by date. | Exclude upcoming talks. |
+| `duplicate` | Present when at least one talk is upcoming, sorted ascending. | Include upcoming talks as well. |
 | `none` | Absent. | Include every dated talk. |
 
 Year groups are ordered newest first, talks within a year newest first. Ties sort by id with code-point comparison. Undated talks go last. The Upcoming group renders as a card grid; other groups render as a divided list.
+
+Empty groups are omitted. The component groups the talks that match the current search and filters, so `context.groups` holds only groups with at least one matching talk. Find the Upcoming group by id rather than by position.
 
 ## Search
 
@@ -186,7 +188,7 @@ With `validation="strict"` on the component and any error, the root renders `<se
 
 ## Copy
 
-Every string and label is a key of `TalksCopy`. Pass `copy={{ ... }}` with any subset. `createDefaultCopy()` and `mergeCopy(overrides)` are exported for building full tables.
+Every string and label other than formatted dates is a key of `TalksCopy`. Pass `copy={{ ... }}` with any subset. `createDefaultCopy()` and `mergeCopy(overrides)` are exported for building full tables.
 
 | Key | Default |
 |---|---|
@@ -210,6 +212,7 @@ Every string and label is a key of `TalksCopy`. Pass `copy={{ ... }}` with any s
 | `upcoming` | `Upcoming` |
 | `upcomingBadge` | `Upcoming` |
 | `undated` | `Undated` |
+| `undatedMonth` | `–` (en dash) |
 | `noTalks` | `No talks yet` |
 | `noTalksDescription` | `Talks will appear here once they are added.` |
 | `noMatches` | `No talks match` |
@@ -257,14 +260,15 @@ Function keys receive numbers or raw strings, never preformatted text:
 | `regionPercentage` | `(percentage) => string` | `42.9%` (one decimal) |
 | `actionLabel` | `(action, title) => string` | `Watch recording: Talk title` |
 
-`undated` doubles as the formatted value for a talk without a valid date. `upcoming` is the group label; `upcomingBadge` is the badge on a card.
+`undated` doubles as the formatted value for a talk without a valid date. `undatedMonth` fills the card margin where a dated talk shows its month abbreviation. `upcoming` is the group label; `upcomingBadge` is the badge on a card.
 
 ## Localization
 
 - `locale` and `dateFormat` feed `Intl.DateTimeFormat` with `timeZone: 'UTC'` forced, so a calendar date never shifts by a day.
 - The month abbreviation in the card margin is formatted with `{ month: 'short' }` in the same locale.
+- Year group headings and the globe's Latest year are formatted with `{ year: 'numeric' }` in the same locale, so they use the locale's calendar and digits like the card dates: `2030年` in `ja-JP`, `พ.ศ. 2573` in `th-TH`, `٢٠٣٠` in `ar-EG`. When the talks in one Gregorian year fall in two years of the locale's calendar (for example `fa-IR`), the heading shows that range.
 - `direction="rtl"` sets `dir="rtl"` on the root. The stylesheet uses logical properties and mirrors the globe callout placement.
-- `copy` carries every string. Build a full table with `mergeCopy` when you localize once and reuse it.
+- `copy` carries every other string. Build a full table with `mergeCopy` when you localize once and reuse it.
 
 ## Density, heading levels and view headings
 

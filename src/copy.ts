@@ -23,6 +23,7 @@ export function createDefaultCopy(): TalksCopy {
     upcoming: 'Upcoming',
     upcomingBadge: 'Upcoming',
     undated: 'Undated',
+    undatedMonth: '–',
     noTalks: 'No talks yet',
     noTalksDescription: 'Talks will appear here once they are added.',
     noMatches: 'No talks match',

@@ -48,6 +48,8 @@ export interface TalksCopy {
   upcoming: string;
   upcomingBadge: string;
   undated: string;
+  /** Shown in a talk card's margin in place of the month abbreviation when the talk has no valid date. */
+  undatedMonth: string;
   noTalks: string;
   noTalksDescription: string;
   noMatches: string;

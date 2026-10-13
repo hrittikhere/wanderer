@@ -65,6 +65,12 @@ export interface GroupOptions {
   upcoming?: 'separate' | 'duplicate' | 'none';
   undatedLabel?: string;
   upcomingLabel?: string;
+  /**
+   * Formats year group labels with Intl.DateTimeFormat `{ year: 'numeric' }` in this locale (UTC), as a range
+   * when a group's talks span two years of the locale's calendar. Without it labels are the Gregorian year.
+   * Ids stay `year-YYYY` either way.
+   */
+  locale?: string;
 }
 
 export interface TalkGroup {

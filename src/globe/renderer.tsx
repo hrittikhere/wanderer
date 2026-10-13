@@ -110,9 +110,9 @@ function anchorToPixels(value: string, extent: number): number | null {
   return match[2] === 'px' ? amount : (amount / 100) * extent;
 }
 
-function latestYear(marker: GlobeMarker): string {
-  const year = parseCalendarDate(marker.latestTalk.date)?.getUTCFullYear();
-  return year === undefined ? '' : String(year);
+function latestYear(marker: GlobeMarker, formatDate: GlobeRendererProps['formatDate']): string {
+  const { date } = marker.latestTalk;
+  return parseCalendarDate(date) ? formatDate(date, { year: 'numeric' }) : '';
 }
 
 export default function GlobeRenderer(props: GlobeRendererProps) {
@@ -544,7 +544,7 @@ export default function GlobeRenderer(props: GlobeRendererProps) {
     );
     const above = tooltip.y > scene.height * 0.4;
     const style: CSSProperties = { left, top: above ? tooltip.y - TOOLTIP_OFFSET : tooltip.y + TOOLTIP_OFFSET };
-    const year = latestYear(marker);
+    const year = latestYear(marker, props.formatDate);
     tooltipNode = (
       <div
         className="wanderer-globe__tooltip"
