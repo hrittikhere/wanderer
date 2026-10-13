@@ -31,8 +31,8 @@ interface Mounted {
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 
-async function mountGlobe(props: Partial<TalksProps> = {}, options: FakeWebGlOptions & { width?: number; before?: (dom: DomHandle) => void } = {}): Promise<Mounted> {
-  const dom = installDom({ width: options.width ?? 1440, reducedMotion: true });
+async function mountGlobe(props: Partial<TalksProps> = {}, options: FakeWebGlOptions & { width?: number; reducedMotion?: boolean; before?: (dom: DomHandle) => void } = {}): Promise<Mounted> {
+  const dom = installDom({ width: options.width ?? 1440, reducedMotion: options.reducedMotion ?? true });
   const gl = installFakeWebGl(dom, options);
   options.before?.(dom);
   const container = dom.document.getElementById('root')!;
@@ -62,6 +62,21 @@ async function mountGlobe(props: Partial<TalksProps> = {}, options: FakeWebGlOpt
 }
 
 describe('the WebGL renderer under a fake GL context', () => {
+  test('manual milestones pause the queue and dismissal survives later animation frames', async () => {
+    const item = await mountGlobe({ milestones: [LISBON], views: [globeView({ intro: false, autoRotate: false })] }, { reducedMotion: false });
+    const select = item.globe.querySelector<HTMLSelectElement>('select')!;
+    await act(async () => { select.value = 'lisbon'; select.dispatchEvent(new item.dom.window.Event('change', { bubbles: true })); });
+    await item.frame(100_000);
+    assert.ok(item.globe.querySelector('.wanderer-globe__callout'), 'a selected card stays visible beyond the auto-dismiss interval');
+    const dismiss = item.globe.querySelector<HTMLButtonElement>('.wanderer-globe__dismiss')!;
+    await act(async () => { click(dismiss, item.dom.window); });
+    await item.frame(100_000);
+    assert.equal(item.globe.querySelector('.wanderer-globe__callout'), null);
+    assert.equal(select.value, '');
+    const resume = [...item.globe.querySelectorAll('button')].find((button) => button.textContent === 'Resume animation')!;
+    assert.ok(resume, 'manual selection and dismissal pause animation until explicitly resumed');
+  });
+
   test('mounts, probes WebGL once per instance, and releases the probe context', async () => {
     const item = await mountGlobe();
     assert.equal(item.globe.getAttribute('data-wanderer-globe-status'), 'ready');
@@ -157,17 +172,20 @@ describe('the WebGL renderer under a fake GL context', () => {
     const item = await mountGlobe({ milestones: [LISBON] });
     const { gl } = item;
     await item.frame();
-    // Past the queue start delay the milestone facing the viewer (Lisbon hosts the most talks) activates.
+    // Reduced motion keeps automatic callouts off; the accessible selector
+    // makes the same content available without timed rotation.
+    const select = item.globe.querySelector<HTMLSelectElement>('select')!;
+    await act(async () => { select.value = 'lisbon'; select.dispatchEvent(new item.dom.window.Event('change', { bubbles: true })); });
     await item.frame(3000);
-    const callout = item.stage.querySelector('.wanderer-globe__callout');
+    const callout = item.globe.querySelector('.wanderer-globe__callout');
     assert.ok(callout, 'a milestone callout is shown');
     assert.equal(callout?.getAttribute('data-wanderer-milestone'), 'lisbon');
     assert.ok(item.globe.querySelector('.wanderer-globe__milestone-dot[data-wanderer-active="true"]'));
     await act(async () => { setInputValue(item.search, 'zzzz-nothing', item.dom.window); });
     assert.ok(item.stage.querySelector('.wanderer-empty'), 'the empty state replaced the renderer');
-    assert.ok(item.stage.querySelector('.wanderer-globe__callout') === null, 'the stale callout is gone');
+    assert.ok(item.globe.querySelector('.wanderer-globe__callout') === null, 'the stale callout is gone');
     await act(async () => { setInputValue(item.search, '', item.dom.window); });
-    assert.ok(item.stage.querySelector('.wanderer-globe__callout') === null, 'the remounted renderer starts without a callout');
+    assert.ok(item.globe.querySelector('.wanderer-globe__callout') === null, 'the remounted renderer starts without a callout');
     assert.equal(gl.programs, 2);
   });
 
@@ -188,7 +206,7 @@ describe('the WebGL renderer under a fake GL context', () => {
     assert.ok(roomy.globe.querySelector('.wanderer-globe__connectors'), 'connectors are drawn toward the card beside the stage');
     // 500px stage in a 700px column at a large viewport: 200px free is not enough, so the card overlays the stage.
     const tight = await mountGlobe({ milestones: [LISBON] }, { before: (dom) => stubRects(dom, 700) });
-    assert.equal(tight.stage.getAttribute('data-wanderer-callout'), 'overlay');
+    assert.equal(tight.stage.getAttribute('data-wanderer-callout'), 'below');
     assert.ok(tight.globe.querySelector('.wanderer-globe__connectors') === null, 'no connectors toward an overlaid card');
   });
 

@@ -62,19 +62,21 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=20"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "node scripts/tsc.mjs -p tsconfig.test.json --noEmit",
-    "test": "npm run build && npm run typecheck && node --import tsx --test \"test/**/*.test.ts\" \"test/**/*.test.tsx\" && node scripts/verify-dist.mjs",
-    "test:unit": "node --import tsx --test \"test/**/*.test.ts\" \"test/**/*.test.tsx\"",
+    "test": "npm run build && npm run typecheck && npm run test:unit && node scripts/verify-dist.mjs",
+    "test:unit": "node scripts/test.mjs",
     "verify:dist": "node scripts/verify-dist.mjs",
     "test:compat": "node scripts/react-compat.mjs",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "test:package": "node scripts/package-smoke.mjs",
+    "test:browser": "npm run build && playwright test"
   },
   "peerDependencies": {
-    "cobe": ">=0.6.0",
+    "cobe": "^0.6.5",
     "react": "^18.2.0 || ^19.0.0",
     "react-dom": "^18.2.0 || ^19.0.0"
   },
@@ -84,6 +86,8 @@
     }
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.64.0",
     "@types/node": "^20.10.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

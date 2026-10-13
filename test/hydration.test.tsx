@@ -244,6 +244,16 @@ describe('Escape to list', () => {
 });
 
 describe('controlled props', () => {
+  test('a declined view request cannot steal focus after the user moves to search', async () => {
+    const item = await hydrate({ views: [globeView()], view: 'list' });
+    const { dom, section } = item;
+    await act(async () => { click(viewButton(section, 'Globe'), dom.window); });
+    const input = section.querySelector<HTMLInputElement>('input[type="search"]')!;
+    await act(async () => { input.focus(); });
+    await item.rerender({ view: 'globe' });
+    assert.equal(dom.document.activeElement, input);
+  });
+
   test('a controlled view reports clicks through onViewChange but only changes when the prop changes', async () => {
     const item = await hydrate({ views: [globeView()], view: 'list' }, { width: 1440 });
     const { dom, section, changes } = item;

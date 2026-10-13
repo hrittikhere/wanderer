@@ -3,6 +3,7 @@
 import type { AnchorHTMLAttributes, MouseEvent, ReactNode } from 'react';
 import type { LinkPolicy, NavigationOptions } from '../component-types.js';
 import type { LinkKind, Talk, TalkLink } from '../types.js';
+import { safeUrl } from '../helpers.js';
 
 const DEFAULT_POLICIES: Record<LinkKind, LinkPolicy> = {
   detail: {},
@@ -43,6 +44,9 @@ export interface TalkLinkAnchorProps extends AnchorHTMLAttributes<HTMLAnchorElem
  * middle-click, modifier-click, and new-tab policies keep native behavior.
  */
 export function TalkLinkAnchor({ link, talk, navigation, children, onClick, ...rest }: TalkLinkAnchorProps) {
+  // Also gate plugin-returned links and direct use of this public component.
+  const href = safeUrl(link.url, { allowRelative: link.kind === 'detail' });
+  if (!href) return <span className={rest.className}>{children}</span>;
   const policy = resolveLinkPolicy(link.kind, navigation.policies);
   const kinds = navigation.linkComponentKinds ?? ['detail'];
   const LinkComponent = navigation.LinkComponent;
@@ -59,7 +63,7 @@ export function TalkLinkAnchor({ link, talk, navigation, children, onClick, ...r
 
   const anchorProps = {
     ...rest,
-    href: link.url,
+    href,
     target: policy.target,
     rel: policy.rel || undefined,
     'data-wanderer-link': link.kind,

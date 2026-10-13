@@ -55,7 +55,7 @@ Accepted:
 - `mailto:` and `tel:` with a target.
 - For `detail` only: relative paths starting with `/` (not `//`), `./`, `../`, `#` or `?`.
 
-Links are validated again when read, so a talk built outside `validateTalks` still cannot render an unsafe `href`. Links returned by plugin actions through `getLink` are the plugin's responsibility; run them through `safeUrl` when they come from data.
+Links are validated again when read, so a talk built outside `validateTalks` still cannot render an unsafe `href`. The public `TalkLinkAnchor`, `context.renderLink`, and plugin action links use the same gate. An unsafe URL becomes noninteractive text and is never forwarded to a custom router.
 
 ## Primary link
 

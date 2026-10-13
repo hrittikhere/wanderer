@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Constrain cobe to the compatible 0.6.5 API and align Node engines, portable test discovery and CI.
+- Set the missing cobe base-brightness uniform explicitly, fixing a black globe caused by a NaN shader value.
+- Put fullscreen navigation inside a native dialog with an explicit exit, focus containment and background scroll locking.
+- Keep compact milestone cards beside or below the globe, with full-photo links, manual selection, pause/resume and dismiss controls. Respect reduced motion for automatic callouts.
+- Contain preload failures and cancel pending controlled-view focus when the visitor moves elsewhere.
+- Reject unsafe links from plugin actions and direct `TalkLinkAnchor` usage before reaching routers.
+- Add runnable Vite and Next.js examples, packed-consumer production builds, bundle budgets, browser regression tests and axe checks in CI.
+- Correct installation, fallback, SSR and integration documentation to match the tested behavior.
+
 All notable changes to `@wanderer/talks` are recorded here. The format follows Keep a Changelog, and the project follows Semantic Versioning.
 
 ## 0.1.0

@@ -64,7 +64,7 @@ Loading sequence inside `GlobeView`:
 3. When the view is `active` and has markers, status becomes `loading`. A WebGL check creates a canvas and asks for `webgl2`, `webgl`, then `experimental-webgl`.
 4. **WebGL unavailable**: status `error`, `data-wanderer-globe-error="webgl"`. The stage shows `copy.globeUnavailable` and `copy.globeUnavailableDescription` with a button (`copy.useList`) that switches to the list view when one is registered.
 5. Otherwise the renderer module is imported dynamically. That module is the only file that imports `cobe`.
-6. **Module missing or failing** (for example `cobe` is not installed, or the chunk fails to download): status `error`, `data-wanderer-globe-error="module"`, same fallback. The import promise is cleared so a later mount retries.
+6. **Module missing or failing** (for example a chunk fails to download): status `error`, `data-wanderer-globe-error="module"`, same fallback. The import promise is cleared so a later mount retries.
 7. **Module loaded**: status `ready`. The renderer mounts inside an error boundary.
 8. **Renderer throws at runtime**: the boundary shows the unavailable fallback and sets `data-wanderer-globe-error="runtime"`.
 
@@ -76,7 +76,7 @@ If the markers drop to zero later (for example a filter removes every mapped tal
 import { preloadGlobeView } from '@wanderer/talks/globe';
 
 useEffect(() => {
-  const id = window.requestIdleCallback?.(() => { void preloadGlobeView(); });
+  const id = window.requestIdleCallback?.(() => { void preloadGlobeView().catch(() => {}); });
   return () => { if (id !== undefined) window.cancelIdleCallback?.(id); };
 }, []);
 ```
@@ -91,7 +91,9 @@ The view reads the `--wanderer-globe-*` tokens from the stage's computed style a
 
 ### Renderer contract
 
-`GlobeRendererProps` from `@wanderer/talks/globe` documents everything the view passes: `markers`, `milestones` (with resolved coordinates), `colors`, `colorScheme`, `reducedMotion`, `paused`, `intro`, `autoRotate`, `showConnectors`, `calloutAnchor`, `copy`, `locale`, `direction`, `formatDate`, `activeMilestoneId`, `onActiveMilestoneChange`, `focusMarkerId` (the location expanded in the accessible list), optional `renderMarkerTooltip`, and optional `onContextLost` / `onContextRestored` (the renderer pauses on a lost WebGL context and rebuilds the globe when the browser restores it; the view falls back to the runtime error state if nothing comes back within 2 seconds). The bundled renderer lives in `globe/renderer` and is the only module that imports `cobe`. It layers the cobe canvas, a 2D particle intro that cross-fades into the globe (decided once per mount; skipped under reduced motion, when `intro` is false, or with no markers), dashed SVG connectors and dots for milestones, and a hover tooltip. Everything that touches the DOM or the clock runs in effects and frame callbacks, so the module evaluates in plain Node.
+`GlobeRendererProps` from `@wanderer/talks/globe` documents everything the view passes: `markers`, `milestones` (with resolved coordinates), `colors`, `colorScheme`, `reducedMotion`, `paused`, `intro`, `autoRotate`, `autoMilestones`, `showConnectors`, `calloutAnchor`, `copy`, `locale`, `direction`, `formatDate`, `activeMilestoneId`, `onActiveMilestoneChange`, `focusMarkerId` (the location expanded in the accessible list), optional `renderMarkerTooltip`, and optional `onContextLost` / `onContextRestored` (the renderer pauses on a lost WebGL context and rebuilds the globe when the browser restores it; the view falls back to the runtime error state if nothing comes back within 2 seconds). The bundled renderer lives in `globe/renderer` and is the only module that imports `cobe`. It layers the cobe canvas, a 2D particle intro that cross-fades into the globe (decided once per mount; skipped under reduced motion, when `intro` is false, or with no markers), dashed SVG connectors and dots for milestones, and a hover tooltip. Everything that touches the DOM or the clock runs in effects and frame callbacks, so the module evaluates in plain Node.
+
+Importing the globe entry requires `cobe@^0.6.5` at build time. A missing peer is normally a bundler error before the runtime fallback can render.
 
 ## Bundle notes
 
@@ -99,4 +101,4 @@ The view reads the `--wanderer-globe-*` tokens from the stage's computed style a
 - The globe entry itself is small; the renderer and `cobe` are in a separate chunk created by the dynamic import. Bundlers that support code splitting (Vite, Next.js, webpack, esbuild with splitting) load it on demand.
 - `sideEffects` in `package.json` lists only CSS, so unused exports tree-shake.
 - Both `dist/esm` and `dist/cjs` are provided. The CommonJS build keeps the dynamic `import()` expression, so the renderer and `cobe` stay out of the initial evaluation path there as well. The loader unwraps both module shapes (`module.default` as the component, or a CommonJS exports object nested under `default`), so the lazy import works in plain Node CommonJS too.
-- Sizes measured by `scripts/verify-dist.mjs` (sum of each entry's own ESM modules, raw and gzip -9, `react` and `cobe` excluded): helpers 14.9 kB raw / 4.8 kB gzip, root 58.3 / 18.2, list 31.2 / 9.9, globe 41.3 / 12.5, lazy renderer chunk 34.9 / 10.3, stylesheet 35.8 / 6.5.
+- `npm run verify:dist` reports current raw and gzip module graph sizes. `npm run test:package` builds isolated tarball consumers and enforces minified gzip budgets, including cobe for the globe bundle.

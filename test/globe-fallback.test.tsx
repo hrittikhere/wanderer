@@ -25,6 +25,16 @@ function webglLessDom(width: number): DomHandle {
 }
 
 describe('GlobeView fallback without WebGL', () => {
+  test('a globe-only configuration stays inline so fullscreen cannot trap the visitor', async () => {
+    const dom = webglLessDom(1440);
+    const container = dom.document.getElementById('root')!;
+    const root = createRoot(container);
+    cleanups.push(async () => { await act(async () => { root.unmount(); }); dom.cleanup(); });
+    await act(async () => { root.render(createElement(Talks, { talks: FIXTURE_TALKS, views: [globeView({ presentation: 'immersive' })], enabledViews: ['globe'] })); });
+    assert.equal(container.querySelector('dialog'), null);
+    assert.ok(container.querySelector('.wanderer-globe__locations'));
+  });
+
   test('after hydration the globe view shows the unavailable copy with a working list button', async () => {
     const dom = webglLessDom(1440);
     const container = dom.document.getElementById('root')!;
@@ -68,8 +78,9 @@ describe('GlobeView fallback without WebGL', () => {
     });
     const section = container.querySelector('.wanderer')!;
     assert.ok(section.querySelector('.wanderer-globe--immersive'));
-    const back = section.querySelector<HTMLButtonElement>('.wanderer-globe__back')!;
-    assert.equal(back.textContent, 'Back to the list');
+    const back = section.querySelector<HTMLButtonElement>('.wanderer-shell__close')!;
+    assert.equal(back.textContent, 'Exit fullscreen');
+    assert.ok(back.closest('dialog')?.querySelector('input[type=search]'), 'the search stays inside fullscreen');
     await act(async () => { click(back, dom.window); });
     assert.equal(section.getAttribute('data-wanderer-view'), 'list');
   });

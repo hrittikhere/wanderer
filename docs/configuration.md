@@ -111,7 +111,7 @@ Without `responsive`, `defaultView` (or the first view) renders in one shell fro
 
 ## Reference date
 
-- The library never reads the clock. If you omit `referenceDate`, nothing is upcoming: the Upcoming group and the `upcoming` filter are empty and no badge shows.
+- Upcoming classification never reads the current date; only globe animation uses a clock. If you omit `referenceDate`, nothing is upcoming: the Upcoming group and the `upcoming` filter are empty and no badge shows.
 - A talk dated the same day as `referenceDate` is upcoming. Comparison is on UTC calendar dates.
 - Invalid or missing talk dates are `undated`, never upcoming.
 - `classifyTalkDate(date, referenceDate)` from `@wanderer/talks/helpers` returns `'upcoming' | 'past' | 'undated'` with the same rules.
@@ -216,6 +216,7 @@ Every string and label is a key of `TalksCopy`. Pass `copy={{ ... }}` with any s
 | `noMappedTalks` | `No talks on the map` |
 | `noMappedDescription` | `Add coordinates to talks, or supply a coordinate resolver, to place them on the globe.` |
 | `useList` | `Open the list` |
+| `exitFullscreen` | `Exit fullscreen` |
 | `backToList` | `Back to the list` |
 | `regions` | `Regions` |
 | `locations` | `Locations` |
@@ -224,6 +225,11 @@ Every string and label is a key of `TalksCopy`. Pass `copy={{ ... }}` with any s
 | `globeLabel` | `Interactive globe of talk locations` |
 | `globeHint` | `Drag to rotate. Hover a marker for details.` |
 | `milestones` | `Milestones` |
+| `chooseMilestone` | `Choose a milestone` |
+| `pauseGlobe` | `Pause animation` |
+| `resumeGlobe` | `Resume animation` |
+| `dismissMilestone` | `Dismiss milestone` |
+| `viewMilestoneImage` | `View full photo` |
 | `latest` | `Latest` |
 | `eventAction` | `Event page` |
 | `recordingAction` | `Watch recording` |
@@ -253,7 +259,7 @@ Function keys receive numbers or raw strings, never preformatted text:
 
 - `locale` and `dateFormat` feed `Intl.DateTimeFormat` with `timeZone: 'UTC'` forced, so a calendar date never shifts by a day.
 - The month abbreviation in the card margin is formatted with `{ month: 'short' }` in the same locale.
-- `direction="rtl"` sets `dir="rtl"` on the root. The stylesheet uses logical properties and mirrors the globe's back arrow.
+- `direction="rtl"` sets `dir="rtl"` on the root. The stylesheet uses logical properties and mirrors the globe callout placement.
 - `copy` carries every string. Build a full table with `mergeCopy` when you localize once and reuse it.
 
 ## Density, heading levels and view headings

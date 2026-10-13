@@ -13,15 +13,24 @@ Plugin-based React components and pure helpers for publishing a speaking history
 - Controlled or uncontrolled view, search and filters.
 - Theming through `--wanderer-*` custom properties: light, dark and system palettes, RTL, reduced motion and forced colors.
 - Every visible string and accessible label is replaceable through `copy`.
-- The library never reads the clock. You pass a `referenceDate`.
+- Upcoming grouping uses the `referenceDate` you supply, never the current date. The globe uses an animation clock only.
 
 ## Installation
 
+The package is not published to npm yet. Try the [runnable examples](examples/README.md), or install a packed checkout:
+
 ```sh
-npm i @wanderer/talks react react-dom
-# optional, only for the globe view
-npm i cobe
+git clone https://github.com/hrittikhere/wanderer.git
+cd wanderer
+npm ci
+npm pack
+# From your application directory, use the path to the generated tarball:
+npm i /path/to/wanderer/wanderer-talks-0.1.0.tgz react react-dom
+# Required when you import @wanderer/talks/globe:
+npm i cobe@^0.6.5
 ```
+
+The renderer uses the cobe 0.6 API. cobe 2 is not compatible. The peer is optional for list-only consumers, but a bundler still needs it installed when you import the globe entry; runtime fallback cannot repair a missing build dependency.
 
 ### Peer dependencies
 
@@ -29,9 +38,9 @@ npm i cobe
 |---|---|---|
 | `react` | `^18.2.0 \|\| ^19.0.0` | yes |
 | `react-dom` | `^18.2.0 \|\| ^19.0.0` | yes |
-| `cobe` | `>=0.6.0` | no (globe view only) |
+| `cobe` | `^0.6.5` | yes when importing the globe; otherwise no |
 
-Node 20 or later is required for the build scripts. The package ships ESM and CommonJS builds, TypeScript declarations and one plain CSS file.
+Use Node 22.22.2+, 24.15.0+, or 26+ (the exact engine range is in `package.json`). `.nvmrc` selects Node 24. The package ships ESM and CommonJS builds, TypeScript declarations and one plain CSS file.
 
 ## Minimal setup
 
@@ -69,7 +78,7 @@ export function Page() {
 | `@wanderer/talks/helpers` | Pure functions, no `"use client"`: `validateTalks`, `filterTalks`, `groupTalks`, `sortTalks`, `parseCalendarDate`, `formatCalendarDate`, `isUpcoming`, `classifyTalkDate`, `talkYear`, `normalizeSearch`, `safeUrl`, `getTalkLinks`, `getPrimaryLink`, `DEFAULT_PRIMARY_LINK_PRECEDENCE`, `locationLabel`, `locationParts`, `validCoordinates`, `resolveTalkCoordinates`, `geographicDistanceKm`, `deriveGeography`, `compareIds`, `definePlugin`, `registerPlugins`, `collectContributions`, plus the schema types (`Talk`, `TalkLink`, `LinkKind`, `ValidationResult`, `Geography`, and so on). |
 | `@wanderer/talks/list` | `ListView`, `listView`, `TalkCard`, `Toolbar`, `TalkGroupSection`, `EmptyState`, `TalkLinkAnchor`, `resolveLinkPolicy`, `Heading`, and the types `TalkViewProps`, `TalkRendererProps`, `ViewContribution`, `TalksContext`. |
 | `@wanderer/talks/globe` | `GlobeView`, `globeView(options)`, `preloadGlobeView`, `GlobeRegionList`, and the types `GlobeViewOptions`, `GlobeColors`, `GlobeRendererProps`, `PositionedMilestone`, `Rgb`. |
-| `@wanderer/talks/styles.css` | The stylesheet. Scoped to `.wanderer`, no global element styles. |
+| `@wanderer/talks/styles.css` | The stylesheet. Component styles are scoped to `.wanderer`; one `html:has()` rule locks scrolling while a Wanderer fullscreen dialog is open. |
 
 `definePlugin` is exported from the root entry and from `./helpers`. It is an identity function typed `<T extends TalksPlugin>(plugin: T) => T`, so an unannotated literal gets contextual types for its callbacks.
 
@@ -221,11 +230,13 @@ export function App() {
 - [docs/ssr.md](docs/ssr.md): server rendering, hydration, RSC boundaries, lazy globe loading.
 - [docs/links.md](docs/links.md): the link model, validation, navigation.
 - [docs/migration.md](docs/migration.md): moving from a site-specific talk shape.
+- [docs/review.md](docs/review.md): comparison findings, fixes and source-data integration notes.
 - [CHANGELOG.md](CHANGELOG.md)
 
 ## Compatibility
 
-- React 18.2 and later, and React 19, per the peer range. The automated compatibility script (`scripts/react-compat.mjs` in the repository, not in the published package) packs the package, installs it into an isolated project per React version and runs a server render, hydration and interaction check. It exercises React 18.3.1 and 19.2.x.
+- React 18.2 and later, and React 19, per the peer range. The automated compatibility script (`scripts/react-compat.mjs` in the repository, not in the published package) packs the package, installs it into an isolated project per React version and runs a server render, hydration and interaction check. It exercises React 18.3.1 and the installed React 19 version. The packed list consumer also builds with React 18.2.0.
+- Vite and Next.js App Router production builds are verified using isolated tarball installs, including RSC boundaries and CSS exports. See [examples](examples/README.md).
 - Browser verification is performed in Chromium via Playwright. Other browsers are not part of the automated run.
 - The globe needs WebGL (WebGL2, WebGL or `experimental-webgl`). Without it the view shows a fallback with a button back to the list.
 
@@ -234,8 +245,22 @@ export function App() {
 These frameworks are untested. The notes describe what should happen based on how the package is built, not on verification.
 
 - **Remix**: untested. The package is ESM and CommonJS with per-file `"use client"` directives, which Remix ignores harmlessly. The client adapter pattern above should work; keep `referenceDate` in the loader.
-- **Astro**: untested. Use the React integration with `client:only="react"` or `client:load`. The globe view needs `client:only="react"` because its loader checks `window`, `document` and WebGL on mount.
+- **Astro**: untested. Use the React integration with `client:only="react"` or `client:load`. The globe checks browser APIs after hydration, so SSR does not require `client:only`; verify the chosen Astro integration in your app.
 - **Create React App**: untested. `react-scripts` 5 resolves package `exports` maps only partially, so the subpath entries may need explicit paths. It has no `"use client"` handling, which is harmless. The CSS import works.
+
+## Development and checks
+
+```sh
+npm ci
+npm test                       # build, typecheck, unit tests and export checks
+npm run test:compat            # isolated React SSR and hydration checks
+npm run test:package           # packed Vite / Next builds and bundle budgets
+npm ci --prefix examples/vite
+npx playwright install chromium
+npm run test:browser           # layout, focus, filters, WebGL fallback and axe
+```
+
+CI runs all four suites. Browser artifacts include traces on failure and milestone screenshots at 390, 768, 1366 and 1920 pixels. `test:package` enforces minified gzip budgets of 18 kB for the list and 30 kB for the globe including cobe, excluding React in both. `verify:dist` separately reports unminified module graph sizes.
 
 ## License
 

@@ -76,6 +76,23 @@ describe('plugins through <Talks>', () => {
 
   const buttons = (section: Element, selector: string) => [...section.querySelectorAll<HTMLButtonElement>(selector)];
 
+  test('rejecting preloads are contained on focus and a later activation still works', async () => {
+    let attempts = 0;
+    const section = await render({ views: [{ id: 'lazy', label: 'Lazy', Component: () => createElement('p', null, 'Loaded view'), preload: () => { attempts += 1; return Promise.reject(new Error('offline')); } }] });
+    const button = buttons(section, '.wanderer-views__button').find((item) => item.textContent === 'Lazy')!;
+    await act(async () => { button.focus(); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    assert.equal(attempts, 1);
+    await act(async () => { click(button, dom.window); });
+    assert.ok(section.textContent?.includes('Loaded view'));
+  });
+
+  test('unsafe plugin links stay readable without a navigable anchor or router invocation', async () => {
+    const section = await render({ plugins: [definePlugin({ id: 'unsafe', actions: [{ id: 'bad', label: 'Unsafe resource', getLink: () => ({ kind: 'general', url: 'javascript:void(0)' }) }] })] });
+    assert.equal(section.querySelector('a[href^="javascript:"]'), null);
+    assert.equal(section.querySelectorAll('span.wanderer-action').length, FIXTURE_TALKS.length);
+    assert.ok(section.textContent?.includes('Unsafe resource'));
+  });
+
   test('a plugin filter appears as a chip after the built-ins and narrows the list when toggled', async () => {
     const plugin = definePlugin({
       id: 'harbor',

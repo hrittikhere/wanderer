@@ -59,6 +59,7 @@ export interface TalksCopy {
   noMappedDescription: string;
   useList: string;
   backToList: string;
+  exitFullscreen: string;
   regions: string;
   locations: string;
   unassignedRegion: string;
@@ -66,6 +67,11 @@ export interface TalksCopy {
   globeLabel: string;
   globeHint: string;
   milestones: string;
+  chooseMilestone: string;
+  pauseGlobe: string;
+  resumeGlobe: string;
+  dismissMilestone: string;
+  viewMilestoneImage: string;
   latest: string;
   eventAction: string;
   recordingAction: string;
@@ -180,6 +186,8 @@ export interface ViewContribution {
   /** Empty strings fall back to copy for the reserved `list` and `globe` ids. */
   label: string;
   heading?: string;
+  /** Fullscreen dialog, including the toolbar. Falls back to inline without an exit view. */
+  presentation?: 'inline' | 'immersive';
   icon?: ReactNode;
   Component: ComponentType<TalkViewProps>;
   /** Invoked when the view is about to be shown; useful for lazy chunks. */
@@ -244,6 +252,7 @@ export interface ResolvedView {
   id: string;
   label: string;
   heading: string;
+  presentation?: 'inline' | 'immersive';
   icon?: ReactNode;
   Component: ComponentType<TalkViewProps>;
   preload?: () => Promise<unknown>;
