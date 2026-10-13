@@ -1,0 +1,98 @@
+{
+  "name": "@wanderer/talks",
+  "version": "0.1.0",
+  "description": "Plugin-based React components and pure helpers for publishing a speaking history: list view, optional 3D globe, search, filters, upcoming grouping, and typed links. Framework-agnostic.",
+  "license": "MIT",
+  "author": "Hrittik Roy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hrittikhere/wanderer.git"
+  },
+  "homepage": "https://github.com/hrittikhere/wanderer#readme",
+  "bugs": {
+    "url": "https://github.com/hrittikhere/wanderer/issues"
+  },
+  "keywords": [
+    "react",
+    "talks",
+    "speaking",
+    "conference",
+    "globe",
+    "cobe",
+    "component",
+    "typescript"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "*.css",
+    "**/*.css"
+  ],
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./helpers": {
+      "types": "./dist/types/helpers.d.ts",
+      "import": "./dist/esm/helpers.js",
+      "require": "./dist/cjs/helpers.js"
+    },
+    "./list": {
+      "types": "./dist/types/list.d.ts",
+      "import": "./dist/esm/list.js",
+      "require": "./dist/cjs/list.js"
+    },
+    "./globe": {
+      "types": "./dist/types/globe.d.ts",
+      "import": "./dist/esm/globe.js",
+      "require": "./dist/cjs/globe.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "node scripts/tsc.mjs -p tsconfig.test.json --noEmit",
+    "test": "npm run build && npm run typecheck && node --import tsx --test \"test/**/*.test.ts\" \"test/**/*.test.tsx\" && node scripts/verify-dist.mjs",
+    "test:unit": "node --import tsx --test \"test/**/*.test.ts\" \"test/**/*.test.tsx\"",
+    "verify:dist": "node scripts/verify-dist.mjs",
+    "test:compat": "node scripts/react-compat.mjs",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "cobe": ">=0.6.0",
+    "react": "^18.2.0 || ^19.0.0",
+    "react-dom": "^18.2.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "cobe": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "cobe": "^0.6.5",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.1.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2"
+  }
+}
