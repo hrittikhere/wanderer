@@ -25,6 +25,8 @@ export interface GlobeRendererProps {
   paused: boolean;
   intro: boolean;
   autoRotate: boolean;
+  /** False freezes the selected milestone while allowing manual globe interaction. */
+  autoMilestones?: boolean;
   /** Draw connector lines from milestone markers toward the callout anchor (large layouts only). */
   showConnectors: boolean;
   calloutAnchor: { x: string; y: string };

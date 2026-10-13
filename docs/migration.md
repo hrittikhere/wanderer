@@ -162,4 +162,4 @@ Then replace the old implementations module by module. When every import points 
 3. Replace the page's list and globe with `<Talks>` behind a client adapter. Pass `referenceDate` from the server.
 4. Move site-only features (timezone, contact, SEO) into a plugin or keep them in the page.
 5. Add `data-wanderer-scheme` to the host's inline theme script and pass `theme` explicitly after hydration.
-6. Add the host scroll-lock CSS if you use the immersive globe.
+6. For immersive mode, keep an inline view enabled as an exit. The dialog handles focus and scroll locking.

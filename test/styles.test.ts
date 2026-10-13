@@ -29,7 +29,7 @@ function mediaBlock(query: string): string {
 
 describe('styles.css contract', () => {
   test('the shared focus-visible rule never overrides a control radius', () => {
-    const focus = block('.wanderer :where(a, button, input, [tabindex]):focus-visible');
+    const focus = block('.wanderer :where(a, button, input, select, [tabindex]):focus-visible');
     assert.ok(focus.includes('outline:'), 'draws an outline');
     assert.equal(focus.includes('border-radius'), false, 'pill controls keep their shape while focused');
     assert.ok(block('.wanderer-talk__title-link:focus-visible').includes('border-radius'), 'text links get a radius of their own');
@@ -59,7 +59,7 @@ describe('styles.css contract', () => {
     const beside = block('.wanderer-globe__stage[data-wanderer-callout="beside"] .wanderer-globe__callout');
     assert.ok(beside.includes('inset-inline-start: 104%') && beside.includes('inline-size: 13rem'));
     const base = block('.wanderer-globe__callout');
-    assert.ok(base.includes('inset-block-end'), 'the default placement overlays the stage');
+    assert.ok(base.includes('position: relative') && base.includes('max-block-size'), 'the default card stays bounded in document flow');
   });
 
   test('forced-colors hover and active states stay in system colors', () => {

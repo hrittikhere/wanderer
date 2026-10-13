@@ -62,7 +62,7 @@ if (!existsSync(path.join(packageRoot, manifest.exports['./styles.css']))) probl
 // 2. Directive placement.
 const withDirective = [
   'components/Talks.js', 'components/ListView.js', 'components/TalkCard.js', 'components/Toolbar.js', 'components/TalkLink.js',
-  'components/ErrorBoundary.js', 'context.js', 'hooks.js', 'globe/GlobeView.js', 'globe/renderer.js',
+  'components/ErrorBoundary.js', 'components/ViewShell.js', 'context.js', 'hooks.js', 'globe/GlobeView.js', 'globe/renderer.js',
 ];
 const withoutDirective = ['index.js', 'helpers.js', 'list.js', 'globe.js', 'types.js', 'component-types.js', 'copy.js', 'plugins.js'];
 const startsWithDirective = (file) => /^['"]use client['"]/.test(readFileSync(file, 'utf8').trimStart());

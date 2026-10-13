@@ -23,7 +23,7 @@ All tokens are defined on `.wanderer`. The dark column applies for `data-wandere
 
 | Token | Light | Dark | Affects |
 |---|---|---|---|
-| `--wanderer-text` | `#18181b` | `#f4f4f5` | Body text, tooltips, back button. |
+| `--wanderer-text` | `#18181b` | `#f4f4f5` | Body text and tooltips. |
 | `--wanderer-text-muted` | `#4b4b55` | `#c6c6cf` | Event line, description, empty state description, location buttons. |
 | `--wanderer-text-subtle` | `#6b6b76` | `#a2a2ad` | Counts, meta rows, placeholders, icons, hints. |
 
@@ -44,7 +44,7 @@ All tokens are defined on `.wanderer`. The dark column applies for `data-wandere
 | `--wanderer-accent-soft` | `#eaf1fd` | `#15223f` | Upcoming card background. |
 | `--wanderer-accent-soft-text` | `#173f8f` | `#cfe0ff` | Upcoming card title link. |
 | `--wanderer-accent-soft-border` | `#c3d6f6` | `#27417a` | Upcoming card border. |
-| `--wanderer-link` | `var(--wanderer-accent)` | same | Accent used as text: link buttons, talk title hover, location talk links, milestone title, back button hover, tooltip icon. Override it when your accent is too light to read as text. |
+| `--wanderer-link` | `var(--wanderer-accent)` | same | Accent used as text: link buttons, talk title hover, location talk links, milestone title, tooltip icon. Override it when your accent is too light to read as text. |
 
 ### Selected state and controls
 
@@ -57,7 +57,7 @@ All tokens are defined on `.wanderer`. The dark column applies for `data-wandere
 | `--wanderer-control-text` | `#18181b` | `#f4f4f5` | Control text. |
 | `--wanderer-control-border` | `#c9c9d1` | `#42424c` | Control border. |
 | `--wanderer-control-hover-bg` | `#f1f1f4` | `#232329` | Control hover background, clear button hover, location button hover. |
-| `--wanderer-control-height` | `2.75rem` | same | Minimum height of the search input, chips, view buttons, buttons, the globe back button and (on coarse pointers) action links. |
+| `--wanderer-control-height` | `2.75rem` | same | Minimum height of the search input, chips, view buttons, buttons, (on coarse pointers) action links. |
 
 ### Focus
 
@@ -70,10 +70,10 @@ All tokens are defined on `.wanderer`. The dark column applies for `data-wandere
 
 | Token | Light | Dark | Affects |
 |---|---|---|---|
-| `--wanderer-overlay-bg` | `rgba(255, 255, 255, 0.9)` | `rgba(20, 20, 23, 0.9)` | Globe panel and back button background (with backdrop blur). |
-| `--wanderer-overlay-border` | `#e4e4e7` | `#2a2a31` | Globe panel, tooltip, milestone and back button borders. |
+| `--wanderer-overlay-bg` | `rgba(255, 255, 255, 0.9)` | `rgba(20, 20, 23, 0.9)` | Globe panel background (with backdrop blur). |
+| `--wanderer-overlay-border` | `#e4e4e7` | `#2a2a31` | Globe panel, tooltip, milestone borders. |
 | `--wanderer-backdrop` | `#ffffff` | `#09090b` | Background of the immersive globe. |
-| `--wanderer-z-overlay` | `30` | same | `z-index` of the immersive globe. |
+| `--wanderer-z-overlay` | `30` | same | Reserved legacy overlay token; the native fullscreen dialog uses the browser top layer. |
 
 ### Typography
 
@@ -115,7 +115,7 @@ Gaps, paddings and margins throughout use these steps.
 | Token | Light | Dark | Affects |
 |---|---|---|---|
 | `--wanderer-shadow-sm` | `0 1px 2px rgba(9, 9, 11, 0.06)` | `0 1px 2px rgba(0, 0, 0, 0.4)` | Reserved for consumers. |
-| `--wanderer-shadow-md` | `0 6px 18px rgba(9, 9, 11, 0.1)` | `0 6px 18px rgba(0, 0, 0, 0.5)` | Globe panel, back button. |
+| `--wanderer-shadow-md` | `0 6px 18px rgba(9, 9, 11, 0.1)` | `0 6px 18px rgba(0, 0, 0, 0.5)` | Globe panel. |
 | `--wanderer-shadow-lg` | `0 18px 40px rgba(9, 9, 11, 0.16)` | `0 18px 40px rgba(0, 0, 0, 0.6)` | Tooltip, milestone card. |
 
 ### Motion
@@ -140,7 +140,9 @@ Gaps, paddings and margins throughout use these steps.
 
 The globe view reads `--wanderer-globe-land`, `--wanderer-globe-marker`, `--wanderer-globe-bg` and `--wanderer-globe-glow` from the computed style of its stage element and converts them to 0 to 1 RGB for WebGL. Any CSS color syntax the browser can resolve works. The values are read on mount and again when `theme` or the color scheme changes, so overrides from consumer CSS and the `tokens` prop reach the renderer. The renderer falls back to built-in values when a token is empty.
 
-In the immersive presentation the layout is one grid row of `minmax(0, 1fr)`, so the panel scrolls internally and the stage centers in the visible area. The stage width is `min(100%, 76vh, var(--wanderer-globe-max-size))` at and above 1024 pixels and `min(100%, 44vh, var(--wanderer-globe-max-size))` below, where the panel moves under the stage and is capped at `38vh`.
+The immersive presentation puts the whole shell in a native fullscreen `<dialog>`, including search, filters, view buttons and the exit control. Background content is inert, focus stays inside, and the shell scrolls when necessary. The stage is capped at `60vh` on desktop and `44vh` on smaller screens. The accessible location list follows the globe on small screens. Without another inline view to exit to, the shell stays inline.
+
+Milestones have bounded thumbnails. When space allows, the callout sits beside the globe; otherwise it sits below in document flow. Custom callout content is constrained to a scrollable 20rem height. A select exposes every milestone, selecting one pauses automatic motion, and dismissing one keeps it dismissed until animation is resumed. Reduced motion disables automatic callouts but preserves manual selection.
 
 ## Class naming
 
@@ -149,16 +151,16 @@ Classes are prefixed `wanderer-` and follow a BEM-like scheme: block (`wanderer-
 | Block | Purpose |
 |---|---|
 | `wanderer`, `wanderer--error` | Root section; error variant in strict validation. |
-| `wanderer-shell`, `--small`, `--large`, `--active` | Responsive shells. |
+| `wanderer-shell`, `--small`, `--large`, `--active`, `--immersive`, `__close` | Responsive shells. |
 | `wanderer-toolbar`, `wanderer-search`, `wanderer-filters`, `wanderer-chip`, `wanderer-views`, `wanderer-views__button`, `wanderer-toolbar__count`, `wanderer-link-button` | Toolbar. |
 | `wanderer-view`, `wanderer-view__heading` | View wrapper and heading. |
 | `wanderer-list`, `wanderer-group`, `wanderer-group__header`, `__title`, `__dot`, `__count`, `__list`, `__list--cards`, `__item` | List and groups. |
 | `wanderer-talk`, `__when`, `__body`, `__title`, `__title-link`, `__event`, `__meta`, `__meta-item`, `__meta-icon`, `__description`, `__actions` | Talk card. |
 | `wanderer-action`, `wanderer-action__icon`, `wanderer-badge`, `--accent`, `--muted`, `wanderer-button` | Actions and badges. |
 | `wanderer-empty`, `__icon`, `__title`, `__description`, `__action`, `wanderer-error` | Empty and error states. |
-| `wanderer-globe`, `--inline`, `--immersive`, `__layout`, `__panel`, `__panel-scroll`, `__summary`, `__lists`, `__section`, `__section-title`, `__regions`, `__region`, `__locations`, `__location`, `__location-button`, `__location-panel`, `__location-talks`, `__stage-wrap`, `__stage`, `__loading`, `__hint`, `__overlay`, `__callout`, `__back` | Globe view. `__overlay` holds the `GlobeStageOverlay` slot over the stage. |
+| `wanderer-globe`, `--inline`, `--immersive`, `__layout`, `__panel`, `__panel-scroll`, `__summary`, `__lists`, `__section`, `__section-title`, `__regions`, `__region`, `__locations`, `__location`, `__location-button`, `__location-panel`, `__location-talks`, `__stage-wrap`, `__stage`, `__loading`, `__hint`, `__overlay`, `__callout`, `__controls`, `__milestones`, `__dismiss` | Globe view. `__overlay` holds the `GlobeStageOverlay` slot over the stage. |
 | `wanderer-globe__scene`, `__layer`, `__canvas`, `__intro`, `__connectors`, `__connector`, `__milestone-dot`, `__tooltip`, `__tooltip-header`, `__tooltip-icon`, `__tooltip-stats`, `__tooltip-label`, `__tooltip-value`, `__tooltip-footer` | Globe renderer layers: the cobe canvas, the intro sketch, connectors, milestone dots and the hover tooltip. |
-| `wanderer-milestone`, `__media`, `__image`, `__body`, `__title`, `__description` | Milestone card. |
+| `wanderer-milestone`, `__media`, `__image`, `__body`, `__title`, `__description`, `__photo` | Milestone card. |
 | `wanderer-visually-hidden`, `wanderer-visually-hidden--focusable` | Screen reader utilities. |
 
 Class names are a public styling surface. Reuse `wanderer-chip`, `wanderer-button`, `wanderer-action` and `wanderer-talk` in custom renderers to inherit sizing and states.
@@ -210,12 +212,12 @@ The palette rules and the hint are plain class and attribute selectors with no `
 
 ## RTL
 
-`direction="rtl"` sets `dir="rtl"` on the root. The stylesheet uses logical properties (`inline-size`, `inset-inline-start`, `padding-inline`, `margin-inline-start`) so the toolbar, search icon, clear button, cards and globe panel mirror. The globe back arrow flips with `[dir="rtl"]`, the milestone callout uses an RTL slide-in, and the trackpad gesture direction inverts.
+`direction="rtl"` sets `dir="rtl"` on the root. The stylesheet uses logical properties (`inline-size`, `inset-inline-start`, `padding-inline`, `margin-inline-start`) so the toolbar, search icon, clear button, cards and globe panel mirror. The milestone callout uses an RTL slide-in, and the trackpad gesture direction inverts.
 
 ## Reduced motion and forced colors
 
 - `prefers-reduced-motion: reduce` sets every animation and transition inside `.wanderer` to 0.01 ms and stops the loading pulse. In the globe, the intro sketch is hidden, the canvas shows at once and connector and dot transitions are removed. The view also passes `reducedMotion` to the renderer, which skips the intro, disables auto-rotation and snaps focus rotations.
-- `forced-colors: active` (Windows High Contrast) keeps borders on chips, buttons, actions, the search input and the back button using `ButtonText` and `ButtonFace`, renders pressed states with `Highlight` and `HighlightText`, draws a 3px `Highlight` focus outline, and uses `CanvasText` for structural borders.
+- `forced-colors: active` (Windows High Contrast) keeps borders on chips, buttons, actions, the search input and the exit button using `ButtonText` and `ButtonFace`, renders pressed states with `Highlight` and `HighlightText`, draws a 3px `Highlight` focus outline, and uses `CanvasText` for structural borders.
 
 ## Data attributes
 
@@ -243,7 +245,7 @@ Inside the component:
 | `data-wanderer-format` | `.wanderer-talk` | `in-person`, `online`, `hybrid` |
 | `data-wanderer-link` | anchors | link kind |
 | `data-wanderer-globe-status` | `.wanderer-globe` | `idle`, `loading`, `ready`, `error` |
-| `data-wanderer-callout` | `.wanderer-globe__stage` | `beside` when the measured free inline-end space fits the milestone callout next to the stage (connector lines are drawn), `overlay` when it must sit over the stage. |
+| `data-wanderer-callout` | `.wanderer-globe__stage` | `beside` when the measured free inline-end space fits the milestone callout next to the stage (connector lines are drawn), `below` when it must sit below the stage. |
 | `data-wanderer-globe-error` | `.wanderer-globe` | `module`, `webgl`, `runtime` or absent |
 | `data-wanderer-paused` | `.wanderer-globe__stage`, `.wanderer-globe__canvas` | `true` when the page is hidden or the stage is offscreen |
 | `data-wanderer-intro` | `.wanderer-globe__scene` | `particles`, `reveal`, `fade`, `done`: the intro cross-fade phase |
@@ -253,27 +255,6 @@ Inside the component:
 | `data-wanderer-expanded` | `.wanderer-globe__location` | `true` when its panel is open |
 | `data-wanderer-milestone` | `.wanderer-globe__callout` | active milestone id |
 
-## Recipe: host scroll locking for the immersive globe
+## Fullscreen integration
 
-`globeView({ presentation: 'immersive' })` fixes the globe to the viewport. Lock page scrolling from the host with `:has()`, and cover the pre-hydration state where only the per-shell attributes exist:
-
-```css
-/* After hydration */
-body:has(.wanderer[data-wanderer-view="globe"]) {
-  overflow: hidden;
-}
-
-/* Before hydration, both shells exist; match the breakpoint the component uses */
-@media (min-width: 1024px) {
-  body:has(.wanderer[data-wanderer-view-large="globe"]) {
-    overflow: hidden;
-  }
-}
-@media (max-width: 1023.98px) {
-  body:has(.wanderer[data-wanderer-view-small="globe"]) {
-    overflow: hidden;
-  }
-}
-```
-
-Use the same breakpoint as `responsive.breakpoint`. Hosts can hide their own chrome with the same selectors.
+`globeView({ presentation: 'immersive' })` opens a native dialog after hydration. The stylesheet locks document scrolling while `.wanderer-shell--immersive[open]` exists; no host scroll-lock recipe is needed. Escape returns to an inline view unless `escapeToList` is false or `isModalOpen()` vetoes it. The explicit Exit fullscreen button remains available. Prefer a list default so opening fullscreen is an explicit visitor action.

@@ -3,6 +3,11 @@
 import type { TalksContext } from '../component-types.js';
 import { CloseIcon, SearchIcon } from './icons.js';
 
+/** Preloading is speculative. A later view mount owns error reporting and retry. */
+function preload(preloadView?: () => Promise<unknown>): void {
+  if (preloadView) void Promise.resolve().then(preloadView).catch(() => {});
+}
+
 interface ToolbarProps {
   context: TalksContext;
   /** The view this toolbar belongs to; differs per shell before hydration measures the viewport. */
@@ -95,8 +100,8 @@ export function Toolbar({ context, activeView, shellKey }: ToolbarProps) {
               className="wanderer-views__button"
               aria-pressed={view.id === activeView}
               onClick={() => setView(view.id, 'user')}
-              onPointerEnter={() => { void view.preload?.(); }}
-              onFocus={() => { void view.preload?.(); }}
+              onPointerEnter={() => preload(view.preload)}
+              onFocus={() => preload(view.preload)}
             >
               {view.icon}
               <span>{view.label}</span>

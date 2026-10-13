@@ -8,9 +8,9 @@ import type { GlobeAsideProps, TalkViewProps, TalksContext, ViewContribution } f
 import type { Geography, GlobeMarker, Talk } from '../types.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { Heading } from '../components/Heading.js';
-import { ArrowIcon, GlobeIcon } from '../components/icons.js';
+import { GlobeIcon } from '../components/icons.js';
 import { EmptyState } from '../components/ListView.js';
-import { compareIds, parseCalendarDate, resolveTalkCoordinates } from '../helpers.js';
+import { compareIds, parseCalendarDate, resolveTalkCoordinates, safeUrl } from '../helpers.js';
 import { useIsClient, usePrefersReducedMotion } from '../hooks.js';
 import { compositeOver, parseCssColor, readCanvasColor, type Rgba } from './colors.js';
 import type { GlobeColors, GlobeRendererProps, PositionedMilestone, Rgb } from './renderer-types.js';
@@ -128,9 +128,9 @@ function useGlobeColors(ref: RefObject<HTMLElement | null>, scheme: 'light' | 'd
  * Whether the milestone callout fits beside the stage. The stylesheet places
  * it at 104% of the stage with a fixed width, so this measures the free space
  * on the inline-end side of the stage inside its column; otherwise the callout
- * overlays the stage and no connectors are drawn. Undefined until measured.
+ * sits below the stage and no connectors are drawn. Undefined until measured.
  */
-function useCalloutPlacement(stageRef: RefObject<HTMLElement | null>, direction: 'ltr' | 'rtl'): 'beside' | 'overlay' | undefined {
+function useCalloutPlacement(stageRef: RefObject<HTMLElement | null>, direction: 'ltr' | 'rtl'): 'beside' | 'below' | undefined {
   const [beside, setBeside] = useState<boolean | undefined>(undefined);
   useEffect(() => {
     const stage = stageRef.current;
@@ -151,7 +151,7 @@ function useCalloutPlacement(stageRef: RefObject<HTMLElement | null>, direction:
     observer.observe(stage);
     return () => observer.disconnect();
   }, [stageRef, direction]);
-  return beside === undefined ? undefined : beside ? 'beside' : 'overlay';
+  return beside === undefined ? undefined : beside ? 'beside' : 'below';
 }
 
 /** Talk ids are free-form strings; element ids and IDREF lists must not contain whitespace. */
@@ -184,7 +184,7 @@ function useOnScreen(ref: RefObject<Element | null>): boolean {
 }
 
 export interface GlobeViewOptions {
-  /** `inline` sits in the page flow; `immersive` covers the viewport with a floating list control. */
+  /** `inline` sits in page flow; `immersive` opens a fullscreen dialog including navigation. */
   presentation?: 'inline' | 'immersive';
   /** Play the particle intro on first mount (skipped under reduced motion). Default true. */
   intro?: boolean;
@@ -285,16 +285,18 @@ export function GlobeRegionList({
 
 function DefaultOverlayCard({ milestone, context }: { milestone: PositionedMilestone; context: TalksContext }) {
   const MilestoneImage = context.ImageComponent;
+  const photoUrl = milestone.image && safeUrl(milestone.image.src, { allowRelative: true });
   return (
     <div className="wanderer-milestone">
       {milestone.image && (
-        <div className="wanderer-milestone__media" style={{ aspectRatio: `${milestone.image.width} / ${milestone.image.height}` }}>
+        <div className="wanderer-milestone__media">
           <MilestoneImage src={milestone.image.src} alt={milestone.image.alt} width={milestone.image.width} height={milestone.image.height} loading="lazy" decoding="async" className="wanderer-milestone__image" />
         </div>
       )}
       <div className="wanderer-milestone__body">
         <p className="wanderer-milestone__title">{milestone.title}</p>
         {milestone.description && <p className="wanderer-milestone__description">{milestone.description}</p>}
+        {photoUrl && <a className="wanderer-milestone__photo" href={photoUrl} target="_blank" rel="noopener noreferrer">{context.copy.viewMilestoneImage}</a>}
       </div>
     </div>
   );
@@ -322,17 +324,17 @@ export function GlobeView({ context, active, options }: GlobeViewComponentProps)
   const documentVisible = useDocumentVisible();
   const stageRef = useRef<HTMLDivElement>(null);
   const onScreen = useOnScreen(stageRef);
-  const { geography, copy, milestones, slots, setView, views, colorScheme, theme } = context;
+  const { geography, copy, milestones, slots, colorScheme, theme } = context;
   const calloutPlacement = useCalloutPlacement(stageRef, context.direction);
   const [status, setStatus] = useState<GlobeStatus>('idle');
   const [Renderer, setRenderer] = useState<ComponentType<GlobeRendererProps> | null>(null);
   const [errorKind, setErrorKind] = useState<GlobeErrorKind | null>(null);
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
+  const [motionPaused, setMotionPaused] = useState(false);
+  const automatic = !motionPaused && !reducedMotion;
   const [expandedMarker, setExpandedMarker] = useState<string | null>(null);
   const colors = useGlobeColors(stageRef, colorScheme, theme);
   const presentation = options.presentation ?? 'inline';
-  const immersive = presentation === 'immersive';
-  const hasList = views.some((view) => view.id === 'list');
   const headingId = useId();
 
   const hasMarkers = geography.markers.length > 0;
@@ -418,10 +420,11 @@ export function GlobeView({ context, active, options }: GlobeViewComponentProps)
           milestones={positionedMilestones}
           colors={colors}
           colorScheme={colorScheme}
-          reducedMotion={reducedMotion}
+          reducedMotion={reducedMotion || motionPaused}
           paused={paused}
           intro={options.intro ?? true}
-          autoRotate={options.autoRotate ?? true}
+          autoRotate={automatic && (options.autoRotate ?? true)}
+          autoMilestones={automatic}
           showConnectors={calloutPlacement === 'beside'}
           calloutAnchor={{ x: '104%', y: '42%' }}
           copy={copy}
@@ -445,18 +448,22 @@ export function GlobeView({ context, active, options }: GlobeViewComponentProps)
     );
   }
 
+  const callout = activeMilestone && rendererShown ? (
+    <div className="wanderer-globe__callout" data-wanderer-milestone={activeMilestone.id}>
+      <button type="button" className="wanderer-button wanderer-globe__dismiss" onClick={() => {
+        setMotionPaused(true);
+        setActiveMilestoneId(null);
+      }}>{copy.dismissMilestone}</button>
+      {OverlayCard ? <OverlayCard milestone={activeMilestone} context={context} /> : <DefaultOverlayCard milestone={activeMilestone} context={context} />}
+    </div>
+  ) : null;
+
   return (
     <div
       className={`wanderer-globe wanderer-globe--${presentation}`}
       data-wanderer-globe-status={status}
       data-wanderer-globe-error={errorKind ?? undefined}
     >
-      {immersive && hasList && (
-        <button type="button" className="wanderer-globe__back" onClick={() => setView('list', 'user')}>
-          <span>{copy.backToList}</span>
-          <ArrowIcon className="wanderer-globe__back-icon" />
-        </button>
-      )}
       <div className="wanderer-globe__layout">
         <aside className="wanderer-globe__panel" aria-labelledby={headingId}>
           <Heading level={context.headingLevel + 1} id={headingId} className="wanderer-visually-hidden">{copy.globeLabel}</Heading>
@@ -477,13 +484,27 @@ export function GlobeView({ context, active, options }: GlobeViewComponentProps)
             data-wanderer-callout={calloutPlacement}
           >
             {stage}
-            {activeMilestone && rendererShown && (
-              <div className="wanderer-globe__callout" data-wanderer-milestone={activeMilestone.id}>
-                {OverlayCard ? <OverlayCard milestone={activeMilestone} context={context} /> : <DefaultOverlayCard milestone={activeMilestone} context={context} />}
-              </div>
-            )}
+            {calloutPlacement === 'beside' && callout}
           </div>
           <p className="wanderer-globe__hint">{copy.globeHint}</p>
+          {rendererShown && (
+            <div className="wanderer-globe__controls">
+              {!reducedMotion && <button type="button" className="wanderer-button" onClick={() => setMotionPaused(!motionPaused)}>{motionPaused ? copy.resumeGlobe : copy.pauseGlobe}</button>}
+              {positionedMilestones.length > 0 && (
+                <label className="wanderer-globe__milestones">
+                  <span>{copy.milestones}</span>
+                  <select value={activeMilestoneId ?? ''} onChange={(event) => {
+                    setMotionPaused(true);
+                    setActiveMilestoneId(event.target.value || null);
+                  }}>
+                    <option value="">{copy.chooseMilestone}</option>
+                    {positionedMilestones.map((milestone) => <option key={milestone.id} value={milestone.id}>{milestone.title}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
+          )}
+          {calloutPlacement !== 'beside' && callout}
           {StageOverlay && (
             <div className="wanderer-globe__overlay">
               <StageOverlay context={context} geography={geography} />
@@ -503,6 +524,7 @@ export function globeView(options: GlobeViewOptions = {}): ViewContribution {
     order: options.order ?? 10,
     label: options.label ?? '',
     heading: options.heading,
+    presentation: options.presentation,
     icon: <GlobeIcon className="wanderer-views__icon" />,
     preload: preloadGlobeView,
     Component,

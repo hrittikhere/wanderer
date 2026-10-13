@@ -24,6 +24,7 @@ import { listView } from './ListView.js';
 import { TalkCard } from './TalkCard.js';
 import { TalkLinkAnchor } from './TalkLink.js';
 import { Toolbar } from './Toolbar.js';
+import { ViewShell } from './ViewShell.js';
 
 export const DEFAULT_BREAKPOINT = 1024;
 const RESERVED_VIEW_IDS = ['list', 'globe'] as const;
@@ -102,6 +103,7 @@ function buildRegistry(
     Component: view.Component,
     preload: view.preload,
     icon: view.icon,
+    presentation: view.presentation,
   }));
 
   const filters = registerPlugins([
@@ -213,7 +215,7 @@ export function Talks(props: TalksProps) {
   /** The unavailable candidate last reported, so one rejected request is announced once. */
   const lastUnavailableRef = useRef<string | undefined>(undefined);
   const lastLargeRef = useRef(isLarge);
-  const focusRequestRef = useRef<string | undefined>(undefined);
+  const focusRequestRef = useRef<{ view: string; source: Element | null } | null>(null);
   const onViewChangeRef = useRef(onViewChange);
   onViewChangeRef.current = onViewChange;
 
@@ -252,18 +254,29 @@ export function Talks(props: TalksProps) {
   const viewHeadingId = useCallback((view: string) => `${instanceId}-view-${view}-heading`, [instanceId]);
 
   useEffect(() => {
-    const target = focusRequestRef.current;
+    // A controlled parent may accept asynchronously. Keep the request only
+    // while focus remains where the user made it; later prop updates must
+    // never steal focus from a search field or another part of the page.
+    const cancelMovedFocus = (event: FocusEvent) => {
+      const request = focusRequestRef.current;
+      if (request?.source?.isConnected && event.target !== request.source) focusRequestRef.current = null;
+    };
+    document.addEventListener('focusin', cancelMovedFocus);
+    return () => document.removeEventListener('focusin', cancelMovedFocus);
+  }, []);
+
+  useEffect(() => {
+    const target = focusRequestRef.current?.view;
     if (!target || typeof document === 'undefined') return;
-    // A declined controlled request must not focus a heading on a later, unrelated change.
-    focusRequestRef.current = undefined;
     if (target !== activeView) return;
+    focusRequestRef.current = null;
     document.getElementById(viewHeadingId(target))?.focus();
   }, [activeView, viewHeadingId]);
 
   const setView = useCallback((next: string, reason: ViewChangeReason = 'user') => {
     if (!viewIdsRef.current.includes(next)) return;
     reasonRef.current = reason;
-    if (reason === 'user') focusRequestRef.current = next;
+    if (reason === 'user') focusRequestRef.current = { view: next, source: document.activeElement };
     if (controlledView === undefined) {
       setUserView(next);
     } else if (next !== controlledView) {
@@ -440,7 +453,12 @@ export function Talks(props: TalksProps) {
     if (!escapeToList || event.key !== 'Escape' || event.defaultPrevented) return;
     if (isModalOpen?.()) return;
     const target = event.target as HTMLElement | null;
-    if (target instanceof HTMLInputElement && target.value) return; // let the input clear itself first
+    if (target instanceof HTMLInputElement && target.value) {
+      // Prevent the dialog's native cancel action while search is being cleared.
+      event.preventDefault();
+      if (target.type === 'search') setSearch('');
+      return;
+    }
     if (activeView === 'list' || !viewIds.includes('list')) return;
     event.preventDefault();
     setView('list', 'user');
@@ -537,8 +555,20 @@ export function Talks(props: TalksProps) {
         {shells.map((shell) => {
           const view = registry.views.find((item) => item.id === shell.view);
           const headingId = shell.view ? viewHeadingId(shell.view) : undefined;
+          const exitView = registry.views.find((item) => item.id !== view?.id && item.presentation !== 'immersive');
+          const exit = () => { if (exitView) setView(exitView.id, 'user'); };
           return (
-            <div key={shell.key} className={`wanderer-shell ${shell.modifier}`} data-wanderer-shell={shell.shell}>
+            <ViewShell
+              key={shell.key}
+              immersive={view?.presentation === 'immersive' && !!exitView}
+              active={!pending}
+              headingId={headingId}
+              className={`wanderer-shell ${shell.modifier}`}
+              shell={shell.shell}
+              closeLabel={copy.exitFullscreen}
+              onExit={exit}
+              onEscape={() => { if (escapeToList && !isModalOpen?.()) exit(); }}
+            >
               <Toolbar context={context} activeView={shell.view} shellKey={shell.key} />
               {view && headingId && (
                 <div className="wanderer-view" data-wanderer-view-id={view.id}>
@@ -561,12 +591,12 @@ export function Talks(props: TalksProps) {
               {!view && (
                 <p className="wanderer-empty__title">{copy.noTalks}</p>
               )}
-            </div>
+              <p className="wanderer-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+                {announcement}
+              </p>
+            </ViewShell>
           );
         })}
-        <p className="wanderer-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
-          {announcement}
-        </p>
       </section>
     </TalksReactContext.Provider>
   );

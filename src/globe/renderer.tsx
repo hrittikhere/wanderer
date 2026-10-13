@@ -229,7 +229,7 @@ export default function GlobeRenderer(props: GlobeRendererProps) {
 
     const updateMilestones = (phi: number, now: number) => {
       const current = propsRef.current;
-      const change = scene.tracker.update({
+      const change = current.autoMilestones === false ? {} : scene.tracker.update({
         phi,
         now,
         sceneReadyAt: scene.sceneReadyAt,
@@ -302,6 +302,9 @@ export default function GlobeRenderer(props: GlobeRendererProps) {
       diffuse: settings.diffuse,
       mapSamples: MAP_SAMPLES,
       mapBrightness: settings.mapBrightness,
+      // cobe 0.6.5 declares this optional but uploads undefined as NaN when
+      // omitted, turning the entire sphere black on real WebGL drivers.
+      mapBaseBrightness: 0,
       baseColor: appliedColors.land,
       markerColor: appliedColors.marker,
       glowColor: appliedColors.glow,

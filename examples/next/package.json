@@ -1,0 +1,7 @@
+{
+  "name": "wanderer-next-example",
+  "private": true,
+  "scripts": { "dev": "next dev", "build": "next build --webpack", "start": "next start" },
+  "dependencies": { "@wanderer/talks": "file:../..", "cobe": "^0.6.5", "next": "^16.4.0", "react": "^19.2.0", "react-dom": "^19.2.0" },
+  "devDependencies": { "typescript": "^5.9.3", "@types/node": "^24.0.0", "@types/react": "^19.2.0", "@types/react-dom": "^19.2.0" }
+}

@@ -221,7 +221,7 @@
 
 /* Focus: visible, never clipped, independent of color. The outline follows
    each control's own radius; only radius-less text links get one here. */
-.wanderer :where(a, button, input, [tabindex]):focus-visible {
+.wanderer :where(a, button, input, select, [tabindex]):focus-visible {
   outline: 2px solid var(--wanderer-focus-ring);
   outline-offset: 2px;
 }
@@ -1035,14 +1035,17 @@
 }
 
 .wanderer-globe__callout {
-  position: absolute;
-  inset-inline: var(--wanderer-space-3);
-  inset-block-end: var(--wanderer-space-3);
+  position: relative;
+  inline-size: min(100%, 24rem);
+  max-block-size: 20rem;
+  overflow: auto;
   z-index: 3;
   animation: wanderer-rise var(--wanderer-duration-slow) var(--wanderer-easing) both;
 }
 
 .wanderer-milestone {
+  display: flex;
+  align-items: start;
   overflow: hidden;
   border: 1px solid var(--wanderer-overlay-border);
   border-radius: var(--wanderer-radius-md);
@@ -1052,7 +1055,9 @@
 
 .wanderer-milestone__media {
   position: relative;
-  inline-size: 100%;
+  flex: 0 0 6rem;
+  inline-size: 6rem;
+  block-size: 6rem;
   background: var(--wanderer-surface-muted);
 }
 
@@ -1064,6 +1069,8 @@
 }
 
 .wanderer-milestone__body {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
   padding: var(--wanderer-space-2) var(--wanderer-space-3) var(--wanderer-space-3);
 }
 
@@ -1083,47 +1090,41 @@
   font-size: var(--wanderer-font-size-xs);
 }
 
-.wanderer-globe__back {
-  position: absolute;
-  inset-inline-end: 0;
-  inset-block-start: 0;
-  z-index: 4;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--wanderer-space-2);
+/* Explicit controls keep motion and photo viewing under the reader's control. */
+.wanderer-globe__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: center;
+  gap: var(--wanderer-space-3);
+  max-inline-size: 100%;
+}
+
+.wanderer-globe__milestones {
+  display: grid;
+  gap: var(--wanderer-space-1);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  font-size: var(--wanderer-font-size-xs);
+}
+
+.wanderer-globe__milestones select {
   min-block-size: var(--wanderer-control-height);
-  padding-inline: var(--wanderer-space-4);
-  border: 1px solid var(--wanderer-overlay-border);
-  border-radius: var(--wanderer-radius-full);
-  background: var(--wanderer-overlay-bg);
-  box-shadow: var(--wanderer-shadow-md);
+  max-inline-size: 100%;
+  padding: var(--wanderer-space-2);
+  border: 1px solid var(--wanderer-border-strong);
+  border-radius: var(--wanderer-radius-sm);
+  background: var(--wanderer-surface);
   color: var(--wanderer-text);
   font: inherit;
-  font-size: var(--wanderer-font-size-sm);
-  cursor: pointer;
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
 }
 
-.wanderer-globe__back:hover {
+.wanderer-globe__dismiss { margin-block-end: var(--wanderer-space-2); }
+.wanderer-milestone__photo {
+  display: inline-block;
+  margin-block-start: var(--wanderer-space-2);
   color: var(--wanderer-link);
-  border-color: var(--wanderer-border-strong);
-}
-
-.wanderer-globe__back-icon {
-  transition: transform var(--wanderer-duration) var(--wanderer-easing);
-}
-
-.wanderer-globe__back:hover .wanderer-globe__back-icon {
-  transform: translateX(2px);
-}
-
-[dir="rtl"] .wanderer-globe__back-icon {
-  transform: scaleX(-1);
-}
-
-[dir="rtl"] .wanderer-globe__back:hover .wanderer-globe__back-icon {
-  transform: scaleX(-1) translateX(2px);
+  font-size: var(--wanderer-font-size-xs);
 }
 
 @media (min-width: 1024px) {
@@ -1139,95 +1140,59 @@
 
 }
 
-/* The callout sits beside the stage only when GlobeView has measured room for
-   it in the column (data-wanderer-callout="beside"); otherwise it overlays the
-   stage, so it is never clipped by the immersive container or pushed outside
-   the component. The 104% and 13rem values are mirrored in GlobeView. */
+/* Measured free space determines placement, independently of viewport width.
+   Tight layouts put the compact card in document flow below the globe. */
 .wanderer-globe__stage[data-wanderer-callout="beside"] .wanderer-globe__callout {
-  inset-inline: auto;
+  position: absolute;
   inset-inline-start: 104%;
   inset-block-start: 42%;
-  inset-block-end: auto;
   inline-size: 13rem;
   animation-name: wanderer-slide-in;
+}
+
+.wanderer-globe__stage[data-wanderer-callout="beside"] .wanderer-milestone { flex-direction: column; }
+.wanderer-globe__stage[data-wanderer-callout="beside"] .wanderer-milestone__media {
+  flex-basis: auto;
+  inline-size: 100%;
+  block-size: 7rem;
 }
 
 [dir="rtl"] .wanderer-globe__stage[data-wanderer-callout="beside"] .wanderer-globe__callout {
   animation-name: wanderer-slide-in-rtl;
 }
 
-/* Immersive presentation: the globe covers the viewport. Hosts can read
-   `data-wanderer-view="globe"` on the root to lock scrolling and hide chrome. */
-.wanderer-globe--immersive {
+/* The native dialog includes the toolbar, heading and exit control. It makes
+   background content inert and keeps keyboard focus in the active view. */
+.wanderer-shell--immersive {
   position: fixed;
   inset: 0;
-  z-index: var(--wanderer-z-overlay);
+  margin: 0;
+  padding: clamp(1rem, 3vw, 2rem);
+  inline-size: 100%;
+  block-size: 100%;
+  max-inline-size: none;
+  max-block-size: none;
+  border: 0;
+  color: var(--wanderer-text);
   background: var(--wanderer-backdrop);
-  overflow: hidden;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
-.wanderer-globe--immersive .wanderer-globe__layout {
-  block-size: 100%;
-  padding: var(--wanderer-space-4);
-  /* The single row is the viewport, never the panel's content height, so the
-     stage centers in the visible area and the panel scrolls internally. */
-  grid-template-rows: minmax(0, 1fr);
-  align-items: stretch;
-}
+.wanderer-shell--immersive:not([open]) { display: none; }
+.wanderer-shell--immersive::backdrop { background: var(--wanderer-backdrop); }
+.wanderer-shell__close { align-self: end; }
+html:has(.wanderer-shell--immersive[open]) { overflow: hidden; }
 
-.wanderer-globe--immersive .wanderer-globe__back {
-  inset-inline-end: var(--wanderer-space-5);
-  inset-block-start: var(--wanderer-space-4);
-}
-
-.wanderer-globe--immersive .wanderer-globe__stage-wrap {
-  justify-content: center;
-  block-size: 100%;
-  min-block-size: 0;
-}
-
-.wanderer-globe--immersive .wanderer-globe__stage {
-  inline-size: min(100%, 76vh, var(--wanderer-globe-max-size));
+.wanderer-shell--immersive .wanderer-globe__stage {
+  inline-size: min(100%, 60vh, var(--wanderer-globe-max-size));
 }
 
 @media (max-width: 1023.98px) {
-  .wanderer-globe--immersive .wanderer-globe__layout {
-    grid-template-rows: minmax(0, 1fr) auto;
-  }
-
-  .wanderer-globe--immersive .wanderer-globe__panel {
-    order: 2;
-    min-block-size: 0;
-    max-block-size: 38vh;
-    overflow: hidden;
-  }
-
-  .wanderer-globe--immersive .wanderer-globe__stage-wrap {
-    order: 1;
-    block-size: 100%;
-    min-block-size: 0;
-    justify-content: center;
-    padding-block-start: var(--wanderer-space-4);
-  }
-
-  /* Bound the square by the remaining height so it never slides under host chrome. */
-  .wanderer-globe--immersive .wanderer-globe__stage {
+  .wanderer-globe__panel { order: 2; }
+  .wanderer-globe__stage-wrap { order: 1; }
+  .wanderer-shell--immersive .wanderer-globe__stage {
     inline-size: min(100%, 44vh, var(--wanderer-globe-max-size));
-  }
-}
-
-@media (min-width: 1024px) {
-  .wanderer-globe--immersive .wanderer-globe__layout {
-    grid-template-columns: 20rem minmax(0, 1fr);
-    padding: var(--wanderer-space-5);
-  }
-
-  .wanderer-globe--immersive .wanderer-globe__panel {
-    position: static;
-    min-block-size: 0;
-    max-block-size: 100%;
-    block-size: 100%;
-    overflow: hidden;
   }
 }
 
@@ -1273,7 +1238,7 @@
   .wanderer-button,
   .wanderer-action,
   .wanderer-search__input,
-  .wanderer-globe__back {
+  .wanderer-globe__milestones select {
     border-color: ButtonText;
     forced-color-adjust: none;
     background: ButtonFace;
@@ -1287,7 +1252,6 @@
   .wanderer-views__button:hover,
   .wanderer-button:hover,
   .wanderer-action:hover,
-  .wanderer-globe__back:hover,
   .wanderer-chip:active,
   .wanderer-views__button:active,
   .wanderer-button:active,
@@ -1319,7 +1283,7 @@
     forced-color-adjust: none;
   }
 
-  .wanderer :where(a, button, input, [tabindex]):focus-visible {
+  .wanderer :where(a, button, input, select, [tabindex]):focus-visible {
     outline: 3px solid Highlight;
   }
 
