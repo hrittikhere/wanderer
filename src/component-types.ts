@@ -96,7 +96,7 @@ export interface TalksCopy {
 export type LinkComponentProps = AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; children?: ReactNode };
 
 export interface LinkPolicy {
-  /** `_blank` opens a new tab; `undefined` or `_self` stays in the window. */
+  /** `_blank` opens a new tab; `undefined` or `_self` stays in the window. Keywords match case-insensitively, as in HTML. */
   target?: '_self' | '_blank' | (string & {});
   /** Explicit rel. With no rel, `_blank` links get `noopener noreferrer`; a rel lacking both gets `noopener` appended. */
   rel?: string;
@@ -106,7 +106,7 @@ export interface NavigationOptions {
   /** Rendered instead of `<a>` for the kinds in `linkComponentKinds` (default: detail links). */
   LinkComponent?: ComponentType<LinkComponentProps>;
   linkComponentKinds?: readonly LinkKind[];
-  /** Called for unmodified primary clicks on same-window links; the default navigation is prevented. */
+  /** Called for unmodified primary clicks on same-window links without a `download` attribute; the default navigation is prevented. */
   onNavigate?: (link: TalkLink, talk: Talk | undefined, event: MouseEvent<HTMLAnchorElement>) => void;
   /** Per-kind target/rel. Defaults: detail stays in the window, everything else opens a new tab. */
   policies?: Partial<Record<LinkKind, LinkPolicy>>;
@@ -217,7 +217,7 @@ export interface ActionContribution {
   when?: (talk: Talk) => boolean;
   /** Rendered as a link through the navigation options when present. */
   getLink?: (talk: Talk) => TalkLink | undefined;
-  /** Rendered as a button when no link is returned. */
+  /** Rendered as a button when no link is returned. With neither a link nor `onAction`, the action is skipped for that talk. */
   onAction?: (talk: Talk, context: TalksContext) => void;
   icon?: ReactNode;
 }
@@ -298,6 +298,7 @@ export interface TalksContext {
   getPrimaryLink: (talk: Talk) => TalkLink | undefined;
   getActions: (talk: Talk) => TalkAction[];
   renderTalk: (talk: Talk, group?: TalkGroup) => ReactNode;
+  /** Renders through `TalkLinkAnchor`. `href`, `target` and `rel` in `props` are ignored: they come from the link and its kind policy. */
   renderLink: (link: TalkLink, children: ReactNode, talk?: Talk, props?: AnchorHTMLAttributes<HTMLAnchorElement>) => ReactNode;
   navigation: NavigationOptions;
   milestones: readonly Milestone[];

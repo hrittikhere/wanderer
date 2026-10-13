@@ -13,11 +13,15 @@ const DEFAULT_POLICIES: Record<LinkKind, LinkPolicy> = {
   general: { target: '_blank' },
 };
 
+// HTML matches target keywords ASCII case-insensitively, so `_BLANK` is a new tab too.
+const NEW_TAB = /^_blank$/i;
+const SAME_WINDOW = /^_self$/i;
+
 /** Resolves target/rel for a link kind. New-tab links always carry noopener unless the consumer's rel already protects. */
 export function resolveLinkPolicy(kind: LinkKind, policies?: NavigationOptions['policies']): Required<Pick<LinkPolicy, 'rel'>> & LinkPolicy {
   const policy = { ...DEFAULT_POLICIES[kind], ...(policies?.[kind] ?? {}) };
   let rel = policy.rel ?? '';
-  if (policy.target === '_blank') {
+  if (policy.target && NEW_TAB.test(policy.target)) {
     const tokens = new Set(rel.split(/\s+/).filter(Boolean));
     if (!tokens.has('noopener') && !tokens.has('noreferrer')) tokens.add('noopener');
     if (policy.rel === undefined) tokens.add('noreferrer');
@@ -31,6 +35,12 @@ function isModifiedClick(event: MouseEvent<HTMLAnchorElement>): boolean {
 }
 
 export interface TalkLinkAnchorProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
+  /** @deprecated Ignored: the href is always `link.url` after the `safeUrl` gate. */
+  href?: string;
+  /** @deprecated Ignored: set it per kind with `navigation.policies`. */
+  target?: AnchorHTMLAttributes<HTMLAnchorElement>['target'];
+  /** @deprecated Ignored: set it per kind with `navigation.policies`. */
+  rel?: string;
   link: TalkLink;
   talk?: Talk;
   navigation: NavigationOptions;
@@ -46,17 +56,19 @@ export interface TalkLinkAnchorProps extends AnchorHTMLAttributes<HTMLAnchorElem
 export function TalkLinkAnchor({ link, talk, navigation, children, onClick, ...rest }: TalkLinkAnchorProps) {
   // Also gate plugin-returned links and direct use of this public component.
   const href = safeUrl(link.url, { allowRelative: link.kind === 'detail' });
-  if (!href) return <span className={rest.className}>{children}</span>;
+  if (!href) return <span className={rest.className} data-wanderer-unsafe="true">{children}</span>;
   const policy = resolveLinkPolicy(link.kind, navigation.policies);
   const kinds = navigation.linkComponentKinds ?? ['detail'];
   const LinkComponent = navigation.LinkComponent;
-  const useComponent = Boolean(LinkComponent) && kinds.includes(link.kind) && policy.target !== '_blank';
+  const useComponent = Boolean(LinkComponent) && kinds.includes(link.kind) && !(policy.target && NEW_TAB.test(policy.target));
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
     if (event.defaultPrevented || !navigation.onNavigate) return;
     if (isModifiedClick(event)) return;
-    if (policy.target && policy.target !== '_self') return;
+    if (policy.target && !SAME_WINDOW.test(policy.target)) return;
+    // A download is not a navigation; let the browser save the file.
+    if (event.currentTarget?.hasAttribute('download')) return;
     event.preventDefault();
     navigation.onNavigate(link, talk, event);
   };

@@ -156,7 +156,8 @@ export function safeUrl(value: unknown, options: { allowRelative?: boolean } = {
   if (options.allowRelative && /^(?:\/(?!\/)|\.{1,2}\/|#|\?)/.test(value)) return value;
   try {
     const parsed = new URL(value);
-    if ((parsed.protocol === 'https:' || parsed.protocol === 'http:') && parsed.hostname && !parsed.username && !parsed.password) return value;
+    // Require the `//` authority marker: an href like `https:host/x` resolves against the page on a same-scheme site.
+    if ((parsed.protocol === 'https:' || parsed.protocol === 'http:') && /^https?:\/\//i.test(value) && parsed.hostname && !parsed.username && !parsed.password) return value;
     if ((parsed.protocol === 'mailto:' || parsed.protocol === 'tel:') && parsed.pathname) return value;
   } catch { /* The caller receives a missing link; validators explain the cause. */ }
   return undefined;

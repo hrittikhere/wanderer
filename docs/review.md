@@ -11,7 +11,7 @@ Reviewed against [the speaking-history page](https://hrittikhere.com/talks), its
 | Node 20 CI disagrees with the installed toolchain and quoted test globs are not portable. | Explicit recursive test discovery and accurate Node engines. | CI matrix on supported Node 22 and 24 versions. |
 | Hover/focus preload failures leak rejected promises. | Catch speculative load failures; the view still owns activation and fallback. | Rejected-preload regression. |
 | A deferred controlled view change can steal focus from search. | Cancel the pending focus request when the visitor moves focus elsewhere. | Controlled-mode focus regression, plus accepted delayed changes. |
-| Plugin and direct links bypass the normal URL gate. | Apply `safeUrl` before any anchor or custom router receives the URL. | Unsafe plugin-link regression and existing link policy suite. |
+| Plugin and direct links bypass the normal URL gate. | Apply `safeUrl` before any anchor or custom router receives the URL. | Unsafe plugin-link regression, the link policy suite and the navigation suite (`LinkComponent`, `onNavigate` and click gating). |
 | Browser and framework claims were stronger than the committed checks. | Runnable Vite and Next.js examples, isolated packed builds, bundle budgets, Playwright and axe in CI. | Unit, React compatibility, consumer and browser jobs. |
 
 ## Applying the site data

@@ -244,6 +244,7 @@ Inside the component:
 | `data-wanderer-upcoming` | `.wanderer-talk` | `true` or absent |
 | `data-wanderer-format` | `.wanderer-talk` | `in-person`, `online`, `hybrid` |
 | `data-wanderer-link` | anchors | link kind |
+| `data-wanderer-unsafe` | the `<span>` that replaces a link whose URL fails `safeUrl` | `true` |
 | `data-wanderer-globe-status` | `.wanderer-globe` | `idle`, `loading`, `ready`, `error` |
 | `data-wanderer-callout` | `.wanderer-globe__stage` | `beside` when the measured free inline-end space fits the milestone callout next to the stage (connector lines are drawn), `below` when it must sit below the stage. |
 | `data-wanderer-globe-error` | `.wanderer-globe` | `module`, `webgl`, `runtime` or absent |

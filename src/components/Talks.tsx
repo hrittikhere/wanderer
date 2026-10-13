@@ -380,7 +380,9 @@ export function Talks(props: TalksProps) {
             ? () => { if (contextRef.current) action.onAction?.(talk, contextRef.current); }
             : undefined,
         };
-      });
+      })
+      // No link and no handler: nothing to render, rather than an inert button.
+      .filter((action) => action.link || action.onAction);
     return [...linkActions, ...pluginActions];
   }, [getPrimary, copy, registry.actions]);
 

@@ -62,6 +62,12 @@ describe('styles.css contract', () => {
     assert.ok(base.includes('position: relative') && base.includes('max-block-size'), 'the default card stays bounded in document flow');
   });
 
+  test('the unsafe-link text fallback drops pointer, hover and press feedback', () => {
+    const fallback = block('.wanderer-action[data-wanderer-unsafe]');
+    assert.ok(fallback.includes('pointer-events: none'), 'hover and :active never match');
+    assert.ok(fallback.includes('cursor: default'));
+  });
+
   test('forced-colors hover and active states stay in system colors', () => {
     const forced = mediaBlock('(forced-colors: active)');
     for (const selector of ['.wanderer-chip:hover', '.wanderer-views__button:hover', '.wanderer-button:hover', '.wanderer-action:hover', '.wanderer-search__input:hover', '.wanderer-chip:active']) {

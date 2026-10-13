@@ -115,7 +115,7 @@ interface ActionContribution {
 }
 ```
 
-Per talk, `when` is evaluated first. If `getLink` returns a link, the action renders as an anchor through the navigation options (target and rel follow the link's `kind`). Otherwise it renders as a `<button>` that calls `onAction(talk, context)`. Actions from links on the talk itself render first, then plugin actions in order. The accessible name is `copy.actionLabel(label, talk.title)`. Without `icon`, the default icon is chosen by `kind` (`recording`, `slides`, `detail`, `event` or `general`); a button with no kind has no icon.
+Per talk, `when` is evaluated first. If `getLink` returns a link, the action renders as an anchor through the navigation options (target and rel follow the link's `kind`). Otherwise, when `onAction` is set, it renders as a `<button>` that calls `onAction(talk, context)`. With neither a link nor `onAction`, the action is not rendered for that talk, so `getLink` can return `undefined` to skip a talk. Actions from links on the talk itself render first, then plugin actions in order. The accessible name is `copy.actionLabel(label, talk.title)`. Without `icon`, the default icon is chosen by `kind` (`recording`, `slides`, `detail`, `event` or `general`); a button with no kind has no icon.
 
 The URL returned by `getLink` passes through the same `safeUrl` gate as built-in links. Unsafe links render their label as noninteractive text and never reach a custom router component.
 

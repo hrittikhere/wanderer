@@ -637,6 +637,12 @@
   .wanderer-action { min-block-size: var(--wanderer-control-height); }
 }
 
+/* TalkLinkAnchor's text fallback for an unsafe URL: no pointer, hover or press feedback. */
+.wanderer-action[data-wanderer-unsafe] {
+  cursor: default;
+  pointer-events: none;
+}
+
 .wanderer-action__icon {
   flex: none;
   inline-size: 0.875rem;

@@ -232,6 +232,17 @@ describe('validateTalks', () => {
     }
   });
 
+  test('http(s) URLs missing the // after the scheme are invalid_url warnings, not page-relative links', () => {
+    const result = validateTalks([talk({
+      id: 'slashless',
+      eventUrl: 'https:sched.example.com/event/1',
+      links: [{ kind: 'general', url: 'https:/notes.test' }],
+    })]);
+    assert.deepEqual(codes(result.warnings).sort(), ['eventUrl:invalid_url', 'links[0].url:invalid_url']);
+    assert.equal(result.talks[0].eventUrl, undefined);
+    assert.deepEqual(result.talks[0].links, []);
+  });
+
   test('javascript: URLs never appear in the output in either mode', () => {
     const input = [talk({
       id: 'js',

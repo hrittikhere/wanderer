@@ -45,17 +45,17 @@ Rejected (the link is dropped, the validator emits an `invalid_url` warning):
 - Not a nonempty string.
 - Contains whitespace, control characters (`U+0000` to `U+001F`, `U+007F`) or a backslash anywhere.
 - A scheme other than `http:`, `https:`, `mailto:` or `tel:`. `javascript:`, `data:`, `file:`, `vbscript:` and everything else never render.
-- `http`/`https` without a hostname or with embedded credentials (`user:pass@host`).
+- `http`/`https` without a hostname, without the `//` before it (`https:example.test` and `https:/example.test`, which browsers resolve against the current page on a same-scheme site), or with embedded credentials (`user:pass@host`).
 - `mailto:` or `tel:` with an empty path.
 - A relative path on any kind except `detail`.
 
 Accepted:
 
-- Absolute `http` and `https` URLs.
+- Absolute `http` and `https` URLs (`https://host/...`).
 - `mailto:` and `tel:` with a target.
 - For `detail` only: relative paths starting with `/` (not `//`), `./`, `../`, `#` or `?`.
 
-Links are validated again when read, so a talk built outside `validateTalks` still cannot render an unsafe `href`. The public `TalkLinkAnchor`, `context.renderLink`, and plugin action links use the same gate. An unsafe URL becomes noninteractive text and is never forwarded to a custom router.
+Links are validated again when read, so a talk built outside `validateTalks` still cannot render an unsafe `href`. The public `TalkLinkAnchor`, `context.renderLink`, and plugin action links use the same gate. An unsafe URL becomes noninteractive text (a `<span data-wanderer-unsafe="true">` that keeps the `className`, without pointer, hover or press feedback) and is never forwarded to a custom router.
 
 ## Primary link
 
@@ -94,13 +94,15 @@ interface LinkPolicy {
 
 ### Anchors, LinkComponent, onNavigate
 
-Every link in the library renders through `TalkLinkAnchor` (exported from the root and list entries). The resolution:
+Every talk link in the library (titles, actions, globe location lists and `context.renderLink`) renders through `TalkLinkAnchor` (exported from the root and list entries). The one exception is the default milestone callout's "View full photo" link: a plain `<a target="_blank" rel="noopener noreferrer">` to the milestone image `src` after `safeUrl` (relative paths allowed). It has no `data-wanderer-link` and ignores `navigation`. The image itself receives `src` unchanged through `ImageComponent`. The resolution:
 
 1. The policy for the link's kind is resolved (see below).
-2. If `LinkComponent` is set, the kind is in `linkComponentKinds` and the resolved target is not `_blank`, the link renders as `<LinkComponent href target rel data-wanderer-link onClick ...>`. This is where `next/link` or a router link goes. New-tab links always stay plain anchors.
+2. If `LinkComponent` is set, the kind is in `linkComponentKinds` and the resolved target is not `_blank` (compared case-insensitively, as HTML does), the link renders as `<LinkComponent href target rel data-wanderer-link onClick ...>`. This is where `next/link` or a router link goes. New-tab links always stay plain anchors.
 3. Otherwise a plain `<a>` renders with the same props.
 
-`onClick` handling, in order: your own `onClick` from `renderLink` props runs first. Then, when `onNavigate` is set and the event is not default-prevented, the click is an unmodified primary click (button 0, no Meta, Ctrl, Shift or Alt), and the policy target is unset or `_self`, the default is prevented and `onNavigate(link, talk, event)` is called. Middle clicks, modifier clicks and new-tab links keep native behavior.
+`onClick` handling, in order: your own `onClick` from `renderLink` props runs first. Then, when `onNavigate` is set and the event is not default-prevented, the click is an unmodified primary click (button 0, no Meta, Ctrl, Shift or Alt), the policy target is unset or `_self`, and the anchor has no `download` attribute, the default is prevented and `onNavigate(link, talk, event)` is called. Middle clicks, modifier clicks, downloads and new-tab links keep native behavior.
+
+`href`, `target` and `rel` passed in `renderLink` props or directly to `TalkLinkAnchor` are ignored: the `href` is always the gated `link.url`, and `target` and `rel` come from the kind's policy. Set them per kind with `policies`.
 
 ### Policies
 
@@ -114,7 +116,7 @@ Defaults:
 | `slides` | `_blank` | `noopener noreferrer` |
 | `general` | `_blank` | `noopener noreferrer` |
 
-`resolveLinkPolicy(kind, policies)` merges your per-kind policy over the default and then applies the `_blank` rule:
+`resolveLinkPolicy(kind, policies)` merges your per-kind policy over the default and then applies the `_blank` rule. Target keywords are compared case-insensitively, as in HTML, so `_BLANK` counts as `_blank` and `_SELF` as `_self`:
 
 - `target: '_blank'` with no `rel` given: `rel="noopener noreferrer"`.
 - `target: '_blank'` with a `rel` that lacks both `noopener` and `noreferrer`: `noopener` is appended to your tokens.
@@ -138,7 +140,7 @@ Examples:
 />
 ```
 
-Every anchor carries `data-wanderer-link="<kind>"` for styling and analytics.
+Every anchor rendered by `TalkLinkAnchor` carries `data-wanderer-link="<kind>"` for styling and analytics.
 
 ## Classifying legacy data
 

@@ -149,6 +149,22 @@ describe('plugins through <Talks>', () => {
     assert.ok(buttons(beacon, 'button.wanderer-action').some((button) => button.textContent === 'Share beacon-2029'));
   });
 
+  test('a plugin action with no link for a talk and no onAction is skipped instead of rendering an inert button', async () => {
+    const transcripts: Record<string, string> = { 'aurora-2030': 'https://transcripts.example/aurora-2030' };
+    const plugin = definePlugin({
+      id: 'transcripts',
+      actions: [
+        { id: 'transcript', label: 'Transcript', getLink: (talk) => (transcripts[talk.id] ? { kind: 'general', url: transcripts[talk.id] } : undefined) },
+        { id: 'nothing', label: 'Nothing' },
+      ],
+    });
+    const section = await render({ plugins: [plugin] });
+    assert.equal(section.querySelectorAll('button.wanderer-action').length, 0, 'no button without a handler');
+    const rendered = [...section.querySelectorAll('.wanderer-action')].filter((node) => ['Transcript', 'Nothing'].includes(node.textContent ?? ''));
+    assert.equal(rendered.length, 1);
+    assert.equal(rendered[0].getAttribute('href'), 'https://transcripts.example/aurora-2030');
+  });
+
   test('a plugin renderer with when() replaces the default card for matching talks only', async () => {
     function Compact({ talk }: TalkRendererProps) {
       return createElement('div', { className: 'custom-card', 'data-talk': talk.id }, talk.title.toUpperCase());
