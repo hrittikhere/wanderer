@@ -141,7 +141,7 @@ describe('hydration of the responsive layout', () => {
     const serverInput = container.querySelector<HTMLInputElement>('.wanderer-shell--large input[type="search"]')!;
     const serverList = container.querySelector('.wanderer-shell--large .wanderer-globe')!;
     serverInput.focus();
-    assert.equal(dom.document.activeElement, serverInput, 'a visitor tabbed into the search box before JavaScript arrived');
+    assert.ok(dom.document.activeElement === serverInput, 'a visitor tabbed into the search box before JavaScript arrived');
     const errors: string[] = [];
     let root!: Root;
     await act(async () => { root = hydrateRoot(container, element(), { onRecoverableError: (error) => errors.push(String(error)) }); });
@@ -151,7 +151,7 @@ describe('hydration of the responsive layout', () => {
       assert.deepEqual(shells(section), ['active']);
       assert.ok(section.querySelector('.wanderer-shell')!.classList.contains('wanderer-shell--active'));
       assert.ok(container.contains(serverInput), 'the server-rendered input is still in the document');
-      assert.equal(dom.document.activeElement, serverInput, 'focus survived hydration');
+      assert.ok(dom.document.activeElement === serverInput, 'focus survived hydration');
       assert.ok(container.contains(serverList), 'the server-rendered view subtree was kept, not rebuilt');
       assert.equal(serverInput.id, section.querySelector('label')!.htmlFor, 'the label still points at the input');
     } finally {
@@ -176,6 +176,22 @@ describe('hydration of the responsive layout', () => {
     assert.deepEqual(changes, [['list', { reason: 'unavailable', previousView: undefined }]], 'the large request for the disabled globe is reported');
     const after = [...section.querySelectorAll('[id]')].map((node) => node.id);
     assert.equal(new Set(after).size, after.length);
+  });
+
+  test('re-enabling the view the user chose reports reason user, not responsive', async () => {
+    const item = await hydrate(responsiveProps(), { width: 1440 });
+    const { dom, section, changes } = item;
+    await act(async () => { click(viewButton(section, 'List'), dom.window); });
+    await act(async () => { click(viewButton(section, 'Globe'), dom.window); });
+    assert.deepEqual(changes.at(-1), ['globe', { reason: 'user', previousView: 'list' }]);
+    const focused = dom.document.activeElement;
+    assert.ok(focused?.id.endsWith('-view-globe-heading'), 'the user click landed focus on the globe heading');
+    await item.rerender({ enabledViews: ['list'] });
+    assert.deepEqual(changes.at(-1), ['list', { reason: 'unavailable', previousView: 'globe' }]);
+    await item.rerender({ enabledViews: undefined });
+    assert.equal(section.getAttribute('data-wanderer-view'), 'globe');
+    assert.deepEqual(changes.at(-1), ['globe', { reason: 'user', previousView: 'list' }], 'the viewport never changed');
+    assert.ok(dom.document.activeElement === focused, 'a restored choice does not move focus');
   });
 });
 

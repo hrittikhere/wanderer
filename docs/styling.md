@@ -243,6 +243,7 @@ Inside the component:
 | `data-wanderer-format` | `.wanderer-talk` | `in-person`, `online`, `hybrid` |
 | `data-wanderer-link` | anchors | link kind |
 | `data-wanderer-globe-status` | `.wanderer-globe` | `idle`, `loading`, `ready`, `error` |
+| `data-wanderer-callout` | `.wanderer-globe__stage` | `beside` when the measured free inline-end space fits the milestone callout next to the stage (connector lines are drawn), `overlay` when it must sit over the stage. |
 | `data-wanderer-globe-error` | `.wanderer-globe` | `module`, `webgl`, `runtime` or absent |
 | `data-wanderer-paused` | `.wanderer-globe__stage`, `.wanderer-globe__canvas` | `true` when the page is hidden or the stage is offscreen |
 | `data-wanderer-intro` | `.wanderer-globe__scene` | `particles`, `reveal`, `fade`, `done`: the intro cross-fade phase |

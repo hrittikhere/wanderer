@@ -165,9 +165,9 @@ describe('the WebGL renderer under a fake GL context', () => {
     assert.ok(item.globe.querySelector('.wanderer-globe__milestone-dot[data-wanderer-active="true"]'));
     await act(async () => { setInputValue(item.search, 'zzzz-nothing', item.dom.window); });
     assert.ok(item.stage.querySelector('.wanderer-empty'), 'the empty state replaced the renderer');
-    assert.equal(item.stage.querySelector('.wanderer-globe__callout'), null, 'the stale callout is gone');
+    assert.ok(item.stage.querySelector('.wanderer-globe__callout') === null, 'the stale callout is gone');
     await act(async () => { setInputValue(item.search, '', item.dom.window); });
-    assert.equal(item.stage.querySelector('.wanderer-globe__callout'), null, 'the remounted renderer starts without a callout');
+    assert.ok(item.stage.querySelector('.wanderer-globe__callout') === null, 'the remounted renderer starts without a callout');
     assert.equal(gl.programs, 2);
   });
 
@@ -189,7 +189,7 @@ describe('the WebGL renderer under a fake GL context', () => {
     // 500px stage in a 700px column at a large viewport: 200px free is not enough, so the card overlays the stage.
     const tight = await mountGlobe({ milestones: [LISBON] }, { before: (dom) => stubRects(dom, 700) });
     assert.equal(tight.stage.getAttribute('data-wanderer-callout'), 'overlay');
-    assert.equal(tight.globe.querySelector('.wanderer-globe__connectors'), null);
+    assert.ok(tight.globe.querySelector('.wanderer-globe__connectors') === null, 'no connectors toward an overlaid card');
   });
 
   test('a search keystroke does not rotate the globe back to the expanded location after the user dragged away', async () => {
@@ -223,11 +223,11 @@ describe('the WebGL renderer under a fake GL context', () => {
     await act(async () => { pointer('pointerdown', 100); pointer('pointermove', 300); pointer('pointerup', 300); });
     await item.frame();
     await hoverLisbon();
-    assert.equal(item.globe.querySelector('.wanderer-globe__tooltip'), null, 'Lisbon has rotated away');
+    assert.ok(item.globe.querySelector('.wanderer-globe__tooltip') === null, 'Lisbon has rotated away');
     // A keystroke that keeps the marker set must not re-run the focus rotation.
     await act(async () => { setInputValue(item.search, 'e', dom.window); });
     await item.frame();
     await hoverLisbon();
-    assert.equal(item.globe.querySelector('.wanderer-globe__tooltip'), null, 'the globe stayed where the user left it');
+    assert.ok(item.globe.querySelector('.wanderer-globe__tooltip') === null, 'the globe stayed where the user left it');
   });
 });

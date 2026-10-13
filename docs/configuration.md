@@ -90,7 +90,7 @@ The context exposes `setView(id, reason?)`, `setSearch`, `setFilters`, `toggleFi
 
 | Reason | When |
 |---|---|
-| `initial` | The first resolution after hydration in uncontrolled mode, including the first responsive pick. |
+| `initial` | The first resolution after hydration in uncontrolled mode, including the first responsive pick. Also reported when a `defaultView` or `enabledViews` change re-resolves the default without a breakpoint crossing or a user choice. |
 | `user` | An explicit action inside the component: a view button, Escape, a trackpad swipe, the globe's "Open the list" or "Back to the list" buttons, or `setView(id)` without a reason. Focus moves to the active view's heading. |
 | `responsive` | The breakpoint crossed and the user had not chosen a view. |
 | `unavailable` | The requested view is disabled or missing, so the first registered view is shown. |
@@ -165,6 +165,7 @@ Errors (reject in strict mode):
 - `talks` is not an array (`invalid_type`).
 - `id`, `title` or `event` missing or blank (`required`). The entry is dropped in both modes.
 - Duplicate `id` (`duplicate_id`). Later occurrences are dropped in both modes.
+- `id` containing whitespace (`invalid_id`). The entry is dropped in both modes because ids become DOM ids and IDREFs.
 - `date` not a real `YYYY-MM-DD` calendar date (`invalid_date`). Lenient keeps the talk as undated.
 - `description` not a string (`required`). Lenient uses an empty string.
 - `format` not `in-person`, `online` or `hybrid` (`invalid_format`). Lenient defaults to `online`.
@@ -174,6 +175,7 @@ Warnings (never reject):
 
 - `location` that is neither a string nor a `{ city, country }` object (`invalid_location`); the field is dropped.
 - `eventUrl`, `recordingUrl`, `slidesUrl`, `detailUrl` that is malformed, contains whitespace or control characters, or uses a scheme other than `http`, `https`, `mailto` or `tel` (`invalid_url`); the field is dropped. `detailUrl` may also be a relative path.
+- A `links[].id` that is empty, contains whitespace, reuses a link kind or a generated `kind-n` id, or repeats within the talk (`invalid_link_id`). The id is dropped and the link is kept.
 - `links` not an array (`invalid_links`), an entry that is not an object (`invalid_link`), an unknown `kind` (`invalid_link_kind`), or an unsafe `url` (`invalid_url`); the entry is dropped.
 
 With `validation="strict"` on the component and any error, the root renders `<section class="wanderer wanderer--error" role="alert">` with `copy.validationError` and nothing else. With `lenient`, the usable talks render and `onValidation` receives the diagnostics.
