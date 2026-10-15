@@ -1,5 +1,5 @@
 import { describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { deriveGeography, geographicDistanceKm, locationParts, resolveTalkCoordinates } from '../src/helpers.js';
 import { restrictGeography } from '../src/geography.js';
 import { talk } from './support/fixtures.js';

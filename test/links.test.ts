@@ -1,5 +1,5 @@
 import { describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { DEFAULT_PRIMARY_LINK_PRECEDENCE, getPrimaryLink, getTalkLinks, safeUrl } from '../src/helpers.js';
 import { resolveLinkPolicy } from '../src/components/TalkLink.js';
 import { talk } from './support/fixtures.js';

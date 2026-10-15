@@ -1,4 +1,4 @@
-import type { TalksCopy } from './component-types.js';
+import type { CopyOverrides, TalksCopy } from './component-types.js';
 
 /** English defaults. Every key can be overridden through the `copy` prop. */
 export function createDefaultCopy(): TalksCopy {
@@ -70,12 +70,13 @@ export function createDefaultCopy(): TalksCopy {
   };
 }
 
-export function mergeCopy(overrides?: Partial<TalksCopy>): TalksCopy {
+export function mergeCopy(overrides?: CopyOverrides): TalksCopy {
   const base = createDefaultCopy();
   if (!overrides) return base;
   const merged: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(overrides)) {
-    if (value !== undefined) merged[key] = value;
+    // undefined and null (a missing key after JSON or RSC serialization) keep the default.
+    if (value !== undefined && value !== null) merged[key] = value;
   }
   return merged as unknown as TalksCopy;
 }

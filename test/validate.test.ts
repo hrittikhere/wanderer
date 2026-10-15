@@ -1,5 +1,5 @@
 import { describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { deriveGeography, groupTalks, validateTalks } from '../src/helpers.js';
 import { REFERENCE_DATE, talk } from './support/fixtures.js';
 

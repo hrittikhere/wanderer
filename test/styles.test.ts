@@ -1,7 +1,7 @@
 // The stylesheet has no runtime in Node; these assertions pin the rules that
 // carry accessibility and layout guarantees so a refactor cannot drop them.
 import { describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

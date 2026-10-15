@@ -3,7 +3,9 @@ export { ListView, listView, TalkGroupSection, EmptyState } from './components/L
 export type { EmptyStateProps } from './components/ListView.js';
 export { TalkCard } from './components/TalkCard.js';
 export { Toolbar } from './components/Toolbar.js';
+export type { ToolbarProps } from './components/Toolbar.js';
 export { TalkLinkAnchor, resolveLinkPolicy } from './components/TalkLink.js';
 export type { TalkLinkAnchorProps } from './components/TalkLink.js';
 export { Heading } from './components/Heading.js';
+export type { HeadingProps } from './components/Heading.js';
 export type { TalkViewProps, TalkRendererProps, ViewContribution, TalksContext } from './component-types.js';

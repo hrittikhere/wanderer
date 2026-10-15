@@ -8,18 +8,18 @@ Every option of `<Talks>` from `@wanderer/talks`. Types come from `TalksProps` i
 
 | Prop | Type | Default | Behavior |
 |---|---|---|---|
-| `talks` | `readonly Talk[] \| readonly unknown[]` | required | Validated with `validateTalks` in the mode set by `validation`. The result is memoized on the array identity, so pass a stable reference. |
+| `talks` | `readonly Talk[] \| readonly unknown[]` | required | Validated with `validateTalks` in the mode set by `validation`. The result is memoized on the array's items: a new array holding the same item objects (for example `[...a, ...b]`) reuses it, while new item objects (an inline `.map()`) validate again. |
 | `referenceDate` | `string` | `undefined` | ISO calendar date `YYYY-MM-DD`, interpreted in UTC. Drives upcoming classification, the `upcoming` filter and the Upcoming group. See [Reference date](#reference-date). |
 | `validation` | `'strict' \| 'lenient'` | `'lenient'` | `strict` renders an error state when the data has any error. `lenient` keeps every usable talk. See [Validation](#validation). |
-| `onValidation` | `(result: ValidationResult) => void` | `undefined` | Called from an effect whenever the validation result changes. Use it to log warnings. |
+| `onValidation` | `(result: ValidationResult) => void` | `undefined` | Called from an effect when the validation result changes: on mount, for new talk items and when `validation` changes. A new callback identity does not call it again, so an inline arrow is fine. A parent that stores the result in state should keep the talk items stable, since new items produce a new result. |
 
 ### Extensions
 
 | Prop | Type | Default | Behavior |
 |---|---|---|---|
 | `plugins` | `readonly TalksPlugin[]` | `[]` | Registered per instance. See [plugins.md](plugins.md). |
-| `views` | `readonly ViewContribution[]` | `[]` | Extra views beside the built-in list, for example `globeView()`. A view with id `list` replaces the built-in list. |
-| `enabledViews` | `readonly string[]` | `undefined` (all) | Keeps only the listed view ids. Registry order is preserved. |
+| `views` | `readonly ViewContribution[]` | `[]` | Extra views beside the built-in list, for example `globeView()`. A view with id `list` replaces the built-in list. A view here may replace the built-in `list` by reusing its id; any other repeated id throws `Duplicate or reserved plugin/contribution ID`, like a plugin's would. |
+| `enabledViews` | `readonly string[]` | `undefined` (all) | Keeps only the listed view ids. Registry order is preserved. Unknown ids are ignored, but a list that matches no registered view throws `enabledViews matches no registered view` during render. |
 | `slots` | `TalksSlots` | `undefined` | `SearchInput`, `GlobeOverlayCard`, `GlobeAside`, `GlobeStageOverlay`. Slots from props win over plugin slots. See [plugins.md](plugins.md#slots). |
 | `milestones` | `readonly Milestone[]` | `[]` | Callouts on the globe. A milestone anchors at `coordinates`, or at the coordinates of the talk named by `talkId`. Milestones that resolve no coordinates are dropped. |
 | `ImageComponent` | `ComponentType<ImageComponentProps>` | a plain `<img loading="lazy" decoding="async">` | Renders milestone images. Pass `next/image` or similar. |
@@ -35,7 +35,7 @@ Every option of `<Talks>` from `@wanderer/talks`. Types come from `TalksProps` i
 | `view` | `string` | `undefined` | Controlled view id. When set, the component never changes the view itself; it reports requests through `onViewChange`. |
 | `onViewChange` | `(view: string, change: ViewChange) => void` | `undefined` | `change.reason` is a `ViewChangeReason`; `change.previousView` is the previous id or `undefined`. |
 | `escapeToList` | `boolean` | `true` | Escape pressed inside the root switches to the view with id `list`. Skipped when the event is already default-prevented, when `isModalOpen()` returns true, when the list is already active, or when no `list` view exists. In a text field that still has text (a text, search, email, URL, phone, password or number input, a textarea or an editable element) Escape belongs to the field: the component prevents the default action, so a fullscreen dialog stays open, and clears only its own search field (built in or the `SearchInput` slot). Checkboxes, ranges and other non-text inputs do not hold Escape back. A browser can still close a fullscreen dialog after repeated Escape presses when `escapeToList` is false or `isModalOpen()` vetoes; the component then returns to the inline view. |
-| `trackpadGestures` | `boolean` | `false` | Horizontal trackpad swipes cycle through the views in registry order. A swipe needs at least 4 pixels of horizontal delta that exceeds the vertical delta, accumulates to 110 pixels, then waits 700 ms before the next switch. RTL inverts the direction. Scrolling is never prevented. Disabled before hydration measures the viewport and when fewer than two views exist. |
+| `trackpadGestures` | `boolean` | `false` | Horizontal trackpad swipes cycle through the views in registry order. A swipe needs at least 4 pixels of horizontal delta that exceeds the vertical delta, accumulates to 110 pixels within one gesture (wheel events less than 300 ms apart), then waits 700 ms before the next switch. Wheel input over a horizontally scrollable element inside a view (an `overflow-x: auto` or `scroll` table or carousel) scrolls that element and never switches views. RTL inverts the direction. Scrolling is never prevented. Disabled before hydration measures the viewport and when fewer than two views exist. |
 | `isModalOpen` | `() => boolean` | `undefined` | Lets a consumer-owned dialog veto the Escape and trackpad shortcuts. |
 
 ### Search and filters
@@ -47,6 +47,8 @@ Every option of `<Talks>` from `@wanderer/talks`. Types come from `TalksProps` i
 | `onSearchChange` | `(search: string) => void` | `undefined` | Fires on every change in both modes. |
 | `filters` | `readonly FilterId[]` | `undefined` | Controlled active filter ids. |
 | `defaultFilters` | `readonly FilterId[]` | `[]` | Uncontrolled starting filter ids. |
+
+An active id that no offered filter matches (a built-in left out of `builtinFilters`, a filter whose plugin is not registered, a typo) is kept in the state and in `onFiltersChange` payloads but has no effect: it filters nothing, presses no chip and does not count as an active filter for the reset button or the announcement. Offer every id you restore from a URL.
 | `onFiltersChange` | `(filters: readonly FilterId[]) => void` | `undefined` | Fires on every change in both modes. |
 | `builtinFilters` | `readonly BuiltinFilterId[]` | `['recording', 'upcoming']` | Which built-in chips to offer, from `recording`, `upcoming`, `online`, `in-person`, `hybrid`. Unknown ids are ignored and duplicates collapse. Chips render in order `recording` (0), `upcoming` (1), `online` (2), `in-person` (3), `hybrid` (4), interleaved with plugin filters by `order`. |
 | `grouping` | `'separate' \| 'duplicate' \| 'none'` | `'separate'` | See [Grouping modes](#grouping-modes). |
@@ -55,7 +57,7 @@ Every option of `<Talks>` from `@wanderer/talks`. Types come from `TalksProps` i
 
 | Prop | Type | Default | Behavior |
 |---|---|---|---|
-| `copy` | `Partial<TalksCopy>` | `undefined` | Overrides merged over the English defaults. Keys set to `undefined` are ignored. See [Copy](#copy). |
+| `copy` | `CopyOverrides` | `undefined` | Overrides merged over the English defaults. Keys set to `undefined` or `null` (a missing value after JSON or RSC serialization) keep the default. An inline literal is fine: a new object with the same values reuses the merged copy. See [Copy](#copy). |
 | `locale` | `string` | `'en-US'` | Passed to `Intl.DateTimeFormat` for card dates, year group headings and the globe's Latest year. See [Localization](#localization). |
 | `dateFormat` | `Intl.DateTimeFormatOptions` | `{ year: 'numeric', month: 'short', day: 'numeric' }` | Format of the full date on a talk card. Always formatted in UTC. The bare `formatCalendarDate` helper defaults to `month: 'long'` instead. |
 | `direction` | `'ltr' \| 'rtl'` | `'ltr'` | Sets `dir` on the root. Layout uses logical properties. |
@@ -84,7 +86,9 @@ In controlled mode, a switch requested inside the component calls `onViewChange(
 
 Search and filters use the same rule: controlled when `search` or `filters` is defined, otherwise internal state seeded from `defaultSearch` or `defaultFilters`. `onSearchChange` and `onFiltersChange` fire in both modes. Do not switch a prop between `undefined` and a value during the component's life.
 
-The context exposes `setView(id, reason?)`, `setSearch`, `setFilters`, `toggleFilter` and `resetAll` for plugins. `setView` ignores ids that are not registered.
+The setters build on the latest value: `toggleFilter` and the function form of `setSearch` and `setFilters` (`setFilters((previous) => [...previous, 'online'])`) compose when called several times in one handler, in both modes. In controlled mode a value the parent does not adopt is dropped once the handler is over, so the next change starts from the prop again.
+
+The context exposes `setView(id, reason?)`, `setSearch`, `setFilters`, `toggleFilter` and `resetAll` for plugins. `setView` ignores ids that are not registered and does nothing for the view already shown (choosing an immersive view that the responsive default shows inline opens it fullscreen).
 
 ## ViewChangeReason
 
@@ -156,7 +160,7 @@ Search text and every searched field are normalized with `normalizeSearch`: NFKD
 - `locationLabel(location)` (the string, or `city, country`)
 - each entry of `tags`
 
-Active filters are applied as predicates on the same pass. The toolbar count uses `copy.resultCount(matching, total)`. A polite live region announces that count 600 ms after the last change, only while search text or a filter is active.
+A query counts as active only when it leaves at least one term after normalization, so a lone combining accent filters nothing, shows no reset button and is not announced. Active filters are applied as predicates on the same pass; a plugin predicate that throws excludes the talks it threw on and is logged once per pass, and the rest of the component keeps working. The toolbar count uses `copy.resultCount(matching, total)`. A polite live region announces that count 600 ms after the last change, only while search text or a filter is active.
 
 ### Large histories
 
@@ -188,7 +192,7 @@ Warnings (never reject):
 
 The result is a projection: keys outside the `Talk` schema (for example `category` or `image`) are dropped without a diagnostic. `<Talks>` validates its `talks` prop, so plugins, renderers and filters only ever see schema fields. Keep site-only data in a map keyed by `id`; see [migration.md](migration.md#site-only-fields).
 
-With `validation="strict"` on the component and any error, the root renders `<section class="wanderer wanderer--error" role="alert">` with `copy.validationError` and nothing else. With `lenient`, the usable talks render and `onValidation` receives the diagnostics.
+With `validation="strict"` on the component and any error, the root renders `<section class="wanderer wanderer--error" role="alert">` with `copy.validationError` and nothing else, and `onViewChange` reports no view until the data is valid. With `lenient`, the usable talks render and `onValidation` receives the diagnostics.
 
 ## Copy
 

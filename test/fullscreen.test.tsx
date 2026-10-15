@@ -4,7 +4,7 @@
 // history-action activation) and, unless prevented, removes `open` and fires
 // `close`.
 import { afterEach, describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

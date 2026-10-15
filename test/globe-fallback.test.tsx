@@ -1,5 +1,5 @@
 import { afterEach, describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { act, createElement } from 'react';
 import type { Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';

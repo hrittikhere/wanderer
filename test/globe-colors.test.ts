@@ -1,5 +1,5 @@
 import { describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { compositeOver, parseCssColor } from '../src/globe/colors.js';
 import { markerSetKey, markerSize } from '../src/globe/markers.js';
 import type { GlobeMarker } from '../src/types.js';

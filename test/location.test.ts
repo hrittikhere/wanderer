@@ -1,5 +1,5 @@
 import { describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { locationParts } from '../src/helpers.js';
 
 describe('locationParts', () => {

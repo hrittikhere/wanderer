@@ -2,7 +2,7 @@
 // the cobe marker cap, time-based rotation, device pixel ratio changes,
 // multi-pointer drags and the hover tooltip.
 import { afterEach, describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { act, createElement, StrictMode } from 'react';
 import type { TalksProps } from '../src/component-types.js';
 import { Talks } from '../src/index.js';

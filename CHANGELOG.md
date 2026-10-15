@@ -31,6 +31,14 @@
 - Escape is held back only by text fields that have text, and clears only the component's own search field (including a text-type `SearchInput` slot); checkboxes and ranges no longer swallow it, and a plugin's own search field no longer clears the component's search.
 - Choosing the view that is already shown no longer leaves a focus request that a later controlled change would act on.
 - The fullscreen scroll lock also covers hosts that scroll `body`, and the shell stacks at `--wanderer-z-overlay` where `showModal()` is unavailable.
+- `toggleFilter`, and `setSearch`/`setFilters` (which now accept a function of the latest value), compose when called several times in one handler, in controlled and uncontrolled mode; `useControllable` returns a stable setter with the same function form.
+- Plugin filter predicates that throw exclude the talks they threw on and are logged once; a throwing `SearchInput` slot shows `copy.pluginError` while the toolbar keeps working; views and renderers that throw during server rendering fall back to client rendering instead of failing the page.
+- Inline `plugins`, `views`, `enabledViews`, `builtinFilters`, `slots`, `copy` and `talks` literals that equal the previous render item by item keep the memoized results; the result announcement no longer restarts on unrelated parent renders and only re-renders its own live region.
+- `onValidation` fires when the result changes, not for a new callback identity, and not while a parent stores the result with stable talks; the strict validation alert reports no view.
+- `enabledViews` that matches no view, a repeated id in `views` (other than replacing `list`), and view ids with whitespace now throw clear errors; `registerPlugins` names a non-object entry.
+- Trackpad gestures reset after a 300 ms pause and ignore wheel input over horizontally scrollable content.
+- A lone combining accent is not an active search; `mergeCopy` ignores `null` as well as `undefined`; group heading ids stay unique when list pieces render in two shells or views.
+- Types: `view`, `search`, `filters` and `copy` (now `CopyOverrides`) accept an explicit `undefined` under `exactOptionalPropertyTypes`; `ToolbarProps`, `HeadingProps`, `ErrorBoundaryProps`, `GlobeViewProps` and `ControllableUpdate` are exported, and `Toolbar` gained optional `search`, `filters` and `hasActiveFilters` props.
 
 All notable changes to `@wanderer/talks` are recorded here. The format follows Keep a Changelog, and the project follows Semantic Versioning.
 

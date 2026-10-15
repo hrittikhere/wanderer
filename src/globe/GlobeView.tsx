@@ -314,11 +314,11 @@ function GlobeFallback({ kind, context }: { kind: GlobeErrorKind | 'empty'; cont
   return <EmptyState icon={<GlobeIcon width={28} height={28} />} title={copy.globeUnavailable} description={copy.globeUnavailableDescription} action={action} />;
 }
 
-interface GlobeViewComponentProps extends TalkViewProps {
+export interface GlobeViewProps extends TalkViewProps {
   options: GlobeViewOptions;
 }
 
-export function GlobeView({ context, active, options, presentation: shellPresentation }: GlobeViewComponentProps) {
+export function GlobeView({ context, active, options, presentation: shellPresentation }: GlobeViewProps) {
   const isClient = useIsClient();
   const reducedMotion = usePrefersReducedMotion();
   const documentVisible = useDocumentVisible();

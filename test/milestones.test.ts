@@ -1,5 +1,5 @@
 import { describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import {
   MILESTONE_ENTER_THRESHOLD, MILESTONE_EXIT_THRESHOLD, MILESTONE_QUEUE_START_DELAY_MS, MilestoneTracker, milestoneThresholds,
 } from '../src/globe/milestones.js';

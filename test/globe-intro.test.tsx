@@ -3,7 +3,7 @@
 // answers getContext('2d') with a recording context here, so the sketch
 // actually runs instead of bailing out to the finished state.
 import { afterEach, describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { act } from 'react';
 import { globeView } from '../src/globe.js';
 import { FrameLoop } from '../src/globe/frame-loop.js';

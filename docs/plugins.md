@@ -32,7 +32,7 @@ interface TalksPlugin {
 }
 ```
 
-Ids must be nonempty with no surrounding whitespace. `order` must be a finite number when present.
+Ids must be nonempty strings with no surrounding whitespace, and view ids must contain no whitespace at all, since they become element ids and `aria-labelledby` references. `order` must be a finite number when present. Every entry of `plugins` (and of each contribution list) must be an object: `[base, flag && extra]` throws a message naming the entry, so filter such arrays first.
 
 ## Ordering
 
@@ -80,7 +80,7 @@ interface TalkViewProps {
 }
 ```
 
-The view component renders the body only. `Talks` renders the toolbar and the heading, wraps the body in an error boundary (fallback: `copy.pluginError`) and resets that boundary when the view changes.
+The view component renders the body only. `Talks` renders the toolbar and the heading, wraps the body in an error boundary (fallback: `copy.pluginError`) and resets that boundary when the view changes. On the server React does not run error boundaries, so the body also sits in a `<Suspense>` boundary: a view that throws during server rendering leaves an empty placeholder and is rendered again on the client, where the error boundary applies. The body is memoized on `context`, so the render that only updates the search field after a keystroke skips it.
 
 ### FilterContribution
 
@@ -138,7 +138,7 @@ interface TalkRendererProps {
 }
 ```
 
-For each talk, the first renderer in order whose `when` passes (or that has no `when`) replaces the built-in `TalkCard`. Each custom renderer is wrapped in an error boundary with `copy.pluginError`. `context.renderTalk(talk, group)` applies the same resolution, so custom views get custom renderers for free.
+For each talk, the first renderer in order whose `when` passes (or that has no `when`) replaces the built-in `TalkCard`. Each custom renderer is wrapped in an error boundary with `copy.pluginError`, and in a `<Suspense>` boundary so a renderer that throws on the server falls back to client rendering for that card instead of failing the page. `context.renderTalk(talk, group)` applies the same resolution, so custom views get custom renderers for free.
 
 ### Slots
 
@@ -177,7 +177,7 @@ Useful members:
 | `allTalks`, `talks`, `groups`, `geography` | Validated talks, the filtered subset, the grouped subset, markers and regions. |
 | `referenceDate`, `isUpcoming(talk)`, `formatDate(date, options?)` | Date helpers bound to the instance's locale and format. |
 | `view`, `views`, `setView(id, reason?)`, `viewHeadingId(id)` | View state. `setView` defaults the reason to `user`, which also moves focus to the heading. |
-| `search`, `setSearch`, `filters`, `setFilters`, `toggleFilter`, `availableFilters`, `hasActiveFilters`, `resetAll` | Search and filter state. |
+| `search`, `setSearch`, `filters`, `setFilters`, `toggleFilter`, `availableFilters`, `hasActiveFilters`, `resetAll` | Search and filter state. `search`, `filters` and `hasActiveFilters` describe the applied results and can trail the field by one render while a long list updates; the setters always apply to the latest value and accept a function of it. |
 | `getLinks(talk)`, `getPrimaryLink(talk)`, `getActions(talk)`, `renderLink(link, children, talk?, props?)` | The link model, honoring the navigation options. |
 | `renderTalk(talk, group?)` | Renders a talk through the renderer resolution. |
 | `copy`, `locale`, `dateFormat`, `direction`, `theme`, `colorScheme`, `breakpoint`, `density`, `headingLevel`, `grouping` | Presentation settings. `colorScheme` is `light` on the server and during hydration when `theme` is `system`; after hydration it honors an ancestor `data-wanderer-scheme` hint, then `prefers-color-scheme`. `breakpoint` is the responsive breakpoint in CSS pixels (`DEFAULT_BREAKPOINT`, 1024, without `responsive`); match it in a custom view with `useMediaQuery(`(min-width: ${context.breakpoint}px)`)`, as the globe does for its connector lines. |
@@ -187,9 +187,10 @@ Useful members:
 
 - Plugin components own their state with ordinary hooks. The library stores nothing for them.
 - Read everything else from `useTalks()` or the `context` prop; do not reach into DOM of other parts of the component.
-- Contributions are registered per instance when the `plugins` prop changes. Keep the plugin array stable (module scope or `useMemo`) so the registry is not rebuilt every render.
+- Contributions are registered per instance when the `plugins` prop changes. An inline array is fine when its items are stable (define plugins at module scope or with `useMemo`): a new array with the same plugin objects keeps the registry. A plugin object created during render rebuilds it every time. The same holds for `views`, `enabledViews`, `builtinFilters` and `slots`.
+- A filter predicate that throws excludes the talks it threw on and is logged once per filtering pass; a `SearchInput` slot that throws is replaced by `copy.pluginError` while the chips, count and views keep working.
 - Subscriptions (timers, observers, event listeners) belong in effects with cleanup. Views unmount when the user switches, and the error boundary resets on view change.
-- Server rendering: every contribution renders on the server. Do not touch `window`, `document`, `matchMedia` or `IntersectionObserver` during render. Use effects, or `useIsClient()` from `@wanderer/talks`, and keep the first client render identical to the server output. Lazy chunks belong in `preload` and in an effect, as `globeView()` does.
+- Server rendering: every contribution renders on the server (a view or renderer that throws there falls back to client rendering). Do not touch `window`, `document`, `matchMedia` or `IntersectionObserver` during render. Use effects, or `useIsClient()` from `@wanderer/talks`, and keep the first client render identical to the server output. Lazy chunks belong in `preload` and in an effect, as `globeView()` does.
 
 ## Accessibility expectations
 

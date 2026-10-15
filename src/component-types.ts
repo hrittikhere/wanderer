@@ -99,6 +99,9 @@ export interface TalksCopy {
   actionLabel: (action: string, title: string) => string;
 }
 
+/** Copy overrides. Keys left out, `undefined` or `null` keep the English default. */
+export type CopyOverrides = { [K in keyof TalksCopy]?: TalksCopy[K] | null | undefined };
+
 export type LinkComponentProps = AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; children?: ReactNode };
 
 export interface LinkPolicy {
@@ -300,10 +303,18 @@ export interface TalksContext {
   views: readonly ResolvedView[];
   setView: (view: string, reason?: ViewChangeReason) => void;
   viewHeadingId: (view: string) => string;
+  /**
+   * The search and filters the current `talks` reflect. While a long list
+   * re-renders after a keystroke they can trail the field by one render; the
+   * setters always apply to the latest value.
+   */
   search: string;
-  setSearch: (value: string) => void;
+  /** Accepts a value or a function of the latest value. */
+  setSearch: (value: string | ((previous: string) => string)) => void;
   filters: readonly string[];
-  setFilters: (value: readonly string[]) => void;
+  /** Accepts a value or a function of the latest value, so several updates in one handler compose. */
+  setFilters: (value: readonly string[] | ((previous: readonly string[]) => readonly string[])) => void;
+  /** Adds or removes one id from the latest filters; two calls in one handler compose. */
   toggleFilter: (id: string) => void;
   availableFilters: readonly FilterContribution[];
   hasActiveFilters: boolean;
@@ -337,7 +348,7 @@ export interface TalksProps {
   plugins?: readonly TalksPlugin[];
   /** Additional views registered beside the built-in list (for example `globeView()`). */
   views?: readonly ViewContribution[];
-  copy?: Partial<TalksCopy>;
+  copy?: CopyOverrides | undefined;
   locale?: string;
   dateFormat?: Intl.DateTimeFormatOptions;
   direction?: TextDirection;
@@ -354,12 +365,15 @@ export interface TalksProps {
   defaultView?: string;
   enabledViews?: readonly string[];
   responsive?: ResponsiveViews;
-  view?: string;
+  /** Controlled view id; `undefined` leaves the view uncontrolled. */
+  view?: string | undefined;
   onViewChange?: (view: string, change: ViewChange) => void;
-  search?: string;
+  /** Controlled search text; `undefined` leaves the search uncontrolled. */
+  search?: string | undefined;
   defaultSearch?: string;
   onSearchChange?: (search: string) => void;
-  filters?: readonly FilterId[];
+  /** Controlled active filter ids; `undefined` leaves the filters uncontrolled. Ids that no offered filter matches are kept but have no effect. */
+  filters?: readonly FilterId[] | undefined;
   defaultFilters?: readonly FilterId[];
   onFiltersChange?: (filters: readonly FilterId[]) => void;
   /** Built-in filters to offer. Default: recording and upcoming. */

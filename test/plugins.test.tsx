@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { act, createElement, type ReactNode } from 'react';
 import type { Root } from 'react-dom/client';
 import { collectContributions, registerPlugins } from '../src/plugins.js';

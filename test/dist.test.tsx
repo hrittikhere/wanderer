@@ -3,7 +3,7 @@
 // how the CommonJS build binds cobe's default export) and the dual-copy hazard
 // are only exercised here. `npm test` builds first.
 import { afterEach, describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';

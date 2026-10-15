@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import type { TalkViewProps, TalksContext, ViewContribution } from '../component-types.js';
 import type { TalkGroup } from '../types.js';
 import { Heading } from './Heading.js';
@@ -25,7 +25,8 @@ export function EmptyState({ title, description, action, icon }: EmptyStateProps
 }
 
 export function TalkGroupSection({ group, context }: { group: TalkGroup; context: TalksContext }) {
-  const id = `${context.instanceId}-group-${group.id}`;
+  // Unique per rendered section: the same group can render in both shells before hydration, or in two views.
+  const id = `${useId()}-group-${group.id}`;
   const isUpcoming = group.id === 'upcoming';
   return (
     <section className="wanderer-group" data-wanderer-group={group.id} aria-labelledby={id}>

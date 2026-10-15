@@ -79,4 +79,13 @@ for (const [module, moduleResolution, file] of [
   const check = spawnSync(process.execPath, [tsc, '--noEmit', '--strict', '--skipLibCheck', 'false', '--jsx', 'react-jsx', '--types', 'react', '--target', 'es2020', '--module', module, '--moduleResolution', moduleResolution, file], { cwd: typesDir, encoding: 'utf8' });
   assert.equal(check.status, 0, `TypeScript ${moduleResolution} (${file}) could not use the declarations:\n${check.stdout}${check.stderr}`);
 }
-console.log(`Packed declarations passed under node10, node16 (CommonJS and ESM) and bundler resolution. Fixtures: ${destination}`);
+// Under exactOptionalPropertyTypes the documented "undefined means uncontrolled" and "null or undefined copy keys keep the default" still type.
+await writeFile(path.join(typesDir, 'exact.ts'), `import type { CopyOverrides, TalksProps } from '@wanderer/talks';
+declare const maybe: string | undefined;
+declare const maybeFilters: readonly string[] | undefined;
+const copy: CopyOverrides = { noTalks: maybe, rootLabel: null };
+export const exact: TalksProps = { talks: [], view: maybe, search: maybe, filters: maybeFilters, copy };
+`);
+const exact = spawnSync(process.execPath, [tsc, '--noEmit', '--strict', '--exactOptionalPropertyTypes', '--skipLibCheck', 'false', '--jsx', 'react-jsx', '--types', 'react', '--target', 'es2020', '--module', 'esnext', '--moduleResolution', 'bundler', 'exact.ts'], { cwd: typesDir, encoding: 'utf8' });
+assert.equal(exact.status, 0, `exactOptionalPropertyTypes consumer failed:\n${exact.stdout}${exact.stderr}`);
+console.log(`Packed declarations passed under node10, node16 (CommonJS and ESM) and bundler resolution, and with exactOptionalPropertyTypes. Fixtures: ${destination}`);

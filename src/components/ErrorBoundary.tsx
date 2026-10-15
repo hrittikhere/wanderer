@@ -2,7 +2,7 @@
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
-interface ErrorBoundaryProps {
+export interface ErrorBoundaryProps {
   fallback: ReactNode;
   /** Changing this key resets the boundary. */
   resetKey?: unknown;

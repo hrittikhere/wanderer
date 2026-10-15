@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, useSyncExternalStore, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 import type { ColorScheme, Theme } from './component-types.js';
 
 function noopSubscribe(): () => void {
@@ -66,18 +66,66 @@ export function useColorScheme(theme: Theme, rootRef?: RefObject<Element | null>
   return prefersDark ? 'dark' : 'light';
 }
 
-/** Controlled when `value` is defined; otherwise internal state seeded from `defaultValue`. */
+/** A next value, or a function of the latest value (including updates not rendered yet). */
+export type ControllableUpdate<T> = T | ((previous: T) => T);
+
+/**
+ * Controlled when `value` is defined; otherwise internal state seeded from
+ * `defaultValue`. The setter is stable and accepts a function of the latest
+ * value, so several updates in one handler compose in both modes: each sees
+ * the value the previous one produced, while a controlled value the parent
+ * did not adopt is dropped at the next render.
+ */
 export function useControllable<T>(
   value: T | undefined,
   defaultValue: T,
   onChange?: (next: T) => void,
-): [T, (next: T) => void] {
+): [T, (next: ControllableUpdate<T>) => void] {
   const [inner, setInner] = useState(defaultValue);
   const isControlled = value !== undefined;
   const current = isControlled ? value : inner;
-  const set = useCallback((next: T) => {
-    if (!isControlled) setInner(next);
-    onChange?.(next);
-  }, [isControlled, onChange]);
+  const latestRef = useRef(current);
+  latestRef.current = current;
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const resetQueuedRef = useRef(false);
+  const set = useCallback((next: ControllableUpdate<T>) => {
+    const resolved = typeof next === 'function' ? (next as (previous: T) => T)(latestRef.current) : next;
+    latestRef.current = resolved;
+    if (!isControlled) setInner(resolved);
+    else if (!resetQueuedRef.current) {
+      // Updates in the same handler build on each other; once it is over, the
+      // prop is the truth again, whether or not the parent adopted the value.
+      resetQueuedRef.current = true;
+      queueMicrotask(() => {
+        resetQueuedRef.current = false;
+        if (valueRef.current !== undefined) latestRef.current = valueRef.current;
+      });
+    }
+    onChangeRef.current?.(resolved);
+  }, [isControlled]);
   return [current, set];
+}
+
+/**
+ * Returns the previous value while a new one is shallowly equal (same array
+ * items, or same own keys and values), so inline literals such as
+ * `plugins={[a]}` or `copy={{ ... }}` do not invalidate memoized work.
+ */
+export function useShallowStable<T>(value: T): T {
+  const ref = useRef(value);
+  if (!shallowEqual(ref.current, value)) ref.current = value;
+  return ref.current;
+}
+
+function shallowEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((item, index) => Object.is(item, b[index]));
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) || Array.isArray(b)) return false;
+  if (Object.getPrototypeOf(a) !== Object.prototype || Object.getPrototypeOf(b) !== Object.prototype) return false;
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length
+    && keys.every((key) => Object.prototype.hasOwnProperty.call(b, key) && Object.is((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]));
 }

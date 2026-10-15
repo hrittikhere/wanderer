@@ -2,7 +2,7 @@
 // click handling, per-kind policies and primary link precedence, both
 // directly and through <Talks navigation>.
 import { afterEach, beforeEach, describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { act, createElement } from 'react';
 import type { Root } from 'react-dom/client';
 import { Talks, TalkLinkAnchor, type TalkLinkAnchorProps } from '../src/index.js';
