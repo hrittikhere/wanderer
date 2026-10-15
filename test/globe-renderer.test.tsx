@@ -206,6 +206,16 @@ describe('the WebGL renderer under a fake GL context', () => {
     assert.equal(gl.programs, 2);
   });
 
+  test('the stage and its controls come before the location panel in DOM and focus order', async () => {
+    const item = await mountGlobe({ milestones: [LISBON] });
+    const layout = item.globe.querySelector('.wanderer-globe__layout')!;
+    assert.deepEqual([...layout.children].map((child) => child.className), ['wanderer-globe__stage-wrap', 'wanderer-globe__panel']);
+    const focusable = [...item.globe.querySelectorAll('button, select')];
+    const lastControl = focusable.findIndex((element) => element.tagName === 'SELECT');
+    const firstLocation = focusable.findIndex((element) => element.classList.contains('wanderer-globe__location-button'));
+    assert.ok(lastControl >= 0 && lastControl < firstLocation, 'Pause and Milestones are reached before the locations');
+  });
+
   test('milestones that repeat an id render once, keeping the first', async () => {
     const copy: Milestone = { ...LISBON, title: 'Copy-pasted milestone', coordinates: [52.52, 13.405] };
     const item = await mountGlobe({ milestones: [LISBON, copy] });

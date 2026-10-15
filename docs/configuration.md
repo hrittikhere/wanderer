@@ -60,7 +60,7 @@ Every option of `<Talks>` from `@wanderer/talks`. Types come from `TalksProps` i
 | `dateFormat` | `Intl.DateTimeFormatOptions` | `{ year: 'numeric', month: 'short', day: 'numeric' }` | Format of the full date on a talk card. Always formatted in UTC. The bare `formatCalendarDate` helper defaults to `month: 'long'` instead. |
 | `direction` | `'ltr' \| 'rtl'` | `'ltr'` | Sets `dir` on the root. Layout uses logical properties. |
 | `theme` | `'light' \| 'dark' \| 'system'` | `'system'` | Sets `data-wanderer-theme` on the root. `system` is light on the server and during hydration. After hydration it follows an ancestor `data-wanderer-scheme` hint when one exists, otherwise `prefers-color-scheme`. See [styling.md](styling.md#dark-mode). |
-| `tokens` | `ThemeTokens` | `undefined` | Inline `--wanderer-*` custom properties on the root. |
+| `tokens` | `ThemeTokens` | `undefined` | Inline `--wanderer-*` custom properties on the root. Numbers are written without a unit, so give lengths as strings (`'1.5rem'`). See [styling.md](styling.md#tokens). |
 | `className` | `string` | `undefined` | Appended to the root `class` after `wanderer`. |
 | `style` | `CSSProperties` | `undefined` | Inline style on the root, merged after `tokens` so it wins on a collision. |
 | `density` | `'comfortable' \| 'compact'` | `'comfortable'` | Sets `data-wanderer-density`. `compact` hides talk descriptions, tightens card padding and shrinks the title. |

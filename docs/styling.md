@@ -1,6 +1,6 @@
 # Styling
 
-The stylesheet at `@wanderer/talks/styles.css` is plain CSS scoped to `.wanderer`. It sets no global element styles. Colors, type, spacing, radii, shadows, motion and globe colors are custom properties you can override.
+The stylesheet at `@wanderer/talks/styles.css` is plain CSS scoped to `.wanderer`. It sets no global element styles except one: `html:has(.wanderer-shell--immersive[open]) { overflow: hidden; }` locks document scrolling while a fullscreen dialog is open. Colors, type, spacing, radii, shadows, motion and globe colors are custom properties you can override.
 
 ```ts
 import '@wanderer/talks/styles.css';
@@ -8,7 +8,9 @@ import '@wanderer/talks/styles.css';
 
 ## Tokens
 
-All tokens are defined on `.wanderer`. The dark column applies for `data-wanderer-theme="dark"`, for `system` under `prefers-color-scheme: dark`, and for `system` under a `data-wanderer-scheme="dark"` ancestor. Tokens with one value do not change between palettes.
+All tokens are defined on `.wanderer`. The dark column applies for `data-wanderer-theme="dark"`, for `system` under `prefers-color-scheme: dark`, and for `system` when the nearest `data-wanderer-scheme` ancestor says `dark`. Tokens with one value do not change between palettes.
+
+Through the `tokens` prop, numbers are written as they are, without a unit, which suits the unitless tokens (`--wanderer-line-height`, `--wanderer-z-overlay`). Give lengths, durations and colors as strings with their unit: `{ '--wanderer-space-5': '1.5rem' }`, not `24`.
 
 ### Surfaces
 
@@ -124,7 +126,7 @@ Gaps, paddings and margins throughout use these steps.
 |---|---|---|
 | `--wanderer-duration` | `160ms` | Control transitions. |
 | `--wanderer-duration-slow` | `420ms` | Milestone callout entrance. |
-| `--wanderer-easing` | `cubic-bezier(0.2, 0.8, 0.2, 1)` | All transitions and keyframes. |
+| `--wanderer-easing` | `cubic-bezier(0.2, 0.8, 0.2, 1)` | All transitions and keyframes, including the globe reveal, the intro sketch and the milestone connector and dot fades. Their durations are fixed or come from `--wanderer-globe-reveal-duration`. |
 
 ### Globe
 
@@ -140,7 +142,7 @@ Gaps, paddings and margins throughout use these steps.
 
 The globe view reads `--wanderer-globe-land`, `--wanderer-globe-marker`, `--wanderer-globe-bg` and `--wanderer-globe-glow` from the computed style of its stage element and converts them to 0 to 1 RGB for WebGL. Any CSS color syntax the browser can resolve works. The values are read on mount and again when `theme` or the color scheme changes, so overrides from consumer CSS and the `tokens` prop reach the renderer. The renderer falls back to built-in values when a token is empty.
 
-The immersive presentation puts the whole shell in a native fullscreen `<dialog>`, including search, filters, view buttons and the exit control. Background content is inert, focus stays inside, and the shell scrolls when necessary. The stage is capped at `60vh` on desktop and `44vh` on smaller screens. The accessible location list follows the globe on small screens. Without another inline view to exit to, the shell stays inline.
+The immersive presentation puts the whole shell in a native fullscreen `<dialog>`, including search, filters, view buttons and the exit control. Background content is inert, focus stays inside, and the shell scrolls when necessary. The stage is capped at `60vh` on desktop and `44vh` on smaller screens. The accessible location list follows the globe in reading and focus order; on wide layouts it is shown in the first column beside the globe. Without another inline view to exit to, the shell stays inline.
 
 Milestones have bounded thumbnails. Milestone ids must be unique: a repeated id keeps its first milestone and the rest are ignored. When space allows, the callout sits beside the globe; otherwise it sits below in document flow. Custom callout content is constrained to a scrollable 20rem height. A select exposes every milestone, selecting one pauses automatic motion, and dismissing one keeps it dismissed until animation is resumed. Reduced motion disables automatic callouts but preserves manual selection.
 
@@ -177,10 +179,23 @@ Three levels, from broad to narrow:
      --wanderer-font-heading: "Inter", sans-serif;
      --wanderer-radius-full: 0.5rem;
    }
-   .wanderer[data-wanderer-theme="dark"] {
+   ```
+
+   Dark-only overrides have to match each way the dark palette applies: an explicit `theme="dark"`, a dark host hint under `theme="system"` (the default), and the OS preference under `theme="system"`. A rule on `.wanderer[data-wanderer-theme="dark"]` alone never matches the default theme.
+
+   ```css
+   .wanderer[data-wanderer-theme="dark"],
+   [data-wanderer-scheme="dark"] .wanderer[data-wanderer-theme="system"] {
      --wanderer-accent: #ff8433;
    }
+   @media (prefers-color-scheme: dark) {
+     .wanderer[data-wanderer-theme="system"]:not([data-wanderer-scheme="light"] *) {
+       --wanderer-accent: #ff8433;
+     }
+   }
    ```
+
+   These selectors match the stylesheet's own specificity, so loading them later wins. They do not model a light hint nested inside a dark one; hosts that nest hints should pass an explicit `theme` instead.
 
 2. **Per-instance `tokens` prop.** Inline custom properties on the root, highest precedence.
 
@@ -206,7 +221,7 @@ The palette rules and the hint are plain class and attribute selectors with no `
 
 - `theme="light"` or `"dark"` sets `data-wanderer-theme` and the palette follows it regardless of the OS.
 - `theme="system"` (default) uses `prefers-color-scheme` in CSS. On the server and during hydration the component reports `colorScheme: 'light'` in its context; the CSS already paints dark when the OS prefers it, so there is no flash for pure system themes.
-- **Hosts with their own toggle**: resolve the theme in the host and pass `theme="dark"` or `"light"`. If the host resolves the theme before hydration with an inline script, also set `data-wanderer-scheme="dark"` or `"light"` on `<html>` or any ancestor. Under `system`, the stylesheet uses that hint instead of the OS preference, so the first paint matches the host even before React runs. After hydration `useColorScheme` reads the nearest ancestor hint too and watches it with a `MutationObserver`, so under `system` the context's `colorScheme` and the globe's default WebGL colors follow the hint ahead of the OS preference. Passing an explicit `theme` once hydrated is still the simplest way to keep everything in sync.
+- **Hosts with their own toggle**: resolve the theme in the host and pass `theme="dark"` or `"light"`. If the host resolves the theme before hydration with an inline script, also set `data-wanderer-scheme="dark"` or `"light"` on `<html>` or any ancestor. Under `system`, the stylesheet uses the nearest such hint instead of the OS preference, so the first paint matches the host even before React runs. When hints are nested, the nearest one wins in the stylesheet (up to four nested hints) and in `useColorScheme` alike. After hydration `useColorScheme` reads the nearest ancestor hint too and watches it with a `MutationObserver`, so under `system` the context's `colorScheme` and the globe's default WebGL colors follow the hint ahead of the OS preference. Passing an explicit `theme` once hydrated is still the simplest way to keep everything in sync.
 - The root sets the `color-scheme` property (`light` or `dark`), so native controls such as the search field's cancel button and scrollbars match.
 - Nothing is written to `localStorage` and no theme is persisted. The host owns persistence.
 
@@ -252,7 +267,7 @@ Inside the component:
 | `data-wanderer-intro` | `.wanderer-globe__scene` | `particles`, `reveal`, `fade`, `done`: the intro cross-fade phase |
 | `data-wanderer-active` | `.wanderer-globe__connector`, `.wanderer-globe__milestone-dot` | `true` for the active milestone |
 | `data-wanderer-milestone` | `.wanderer-globe__milestone-dot` | milestone id |
-| `data-wanderer-tooltip-position` | `.wanderer-globe__tooltip` | `above` when flipped above the marker |
+| `data-wanderer-tooltip-position` | `.wanderer-globe__tooltip` | `above` when flipped above the marker, otherwise `below` (always present) |
 | `data-wanderer-expanded` | `.wanderer-globe__location` | `true` when its panel is open |
 | `data-wanderer-milestone` | `.wanderer-globe__callout` | active milestone id |
 

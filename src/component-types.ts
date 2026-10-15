@@ -10,6 +10,12 @@ export type Density = 'comfortable' | 'compact';
 export type GroupingMode = 'separate' | 'duplicate' | 'none';
 export type BuiltinFilterId = 'recording' | 'upcoming' | 'online' | 'in-person' | 'hybrid';
 export type FilterId = BuiltinFilterId | (string & {});
+/**
+ * Inline `--wanderer-*` custom properties. React writes custom properties as
+ * they are, so a number gets no unit: use numbers only for unitless tokens
+ * (`--wanderer-line-height`, `--wanderer-z-overlay`) and strings with units
+ * for lengths, durations and colors.
+ */
 export type ThemeTokens = Partial<Record<`--wanderer-${string}`, string | number>>;
 
 /**

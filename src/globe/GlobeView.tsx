@@ -477,14 +477,6 @@ export function GlobeView({ context, active, options }: GlobeViewComponentProps)
       data-wanderer-globe-error={errorKind ?? undefined}
     >
       <div className="wanderer-globe__layout">
-        <aside className="wanderer-globe__panel" aria-labelledby={headingId}>
-          <Heading level={context.headingLevel + 1} id={headingId} className="wanderer-visually-hidden">{copy.globeLabel}</Heading>
-          <div className="wanderer-globe__panel-scroll">
-            <GlobeRegionList context={context} geography={geography} expanded={expandedMarker} onToggle={setExpandedMarker} />
-            {GlobeAside && <GlobeAside context={context} geography={geography} />}
-          </div>
-          <p className="wanderer-globe__summary">{copy.mappedCount(geography.mappedCount, geography.markers.length)}</p>
-        </aside>
         <div className="wanderer-globe__stage-wrap">
           <div
             ref={stageRef}
@@ -523,6 +515,14 @@ export function GlobeView({ context, active, options }: GlobeViewComponentProps)
             </div>
           )}
         </div>
+        <aside className="wanderer-globe__panel" aria-labelledby={headingId}>
+          <Heading level={context.headingLevel + 1} id={headingId} className="wanderer-visually-hidden">{copy.globeLabel}</Heading>
+          <div className="wanderer-globe__panel-scroll">
+            <GlobeRegionList context={context} geography={geography} expanded={expandedMarker} onToggle={setExpandedMarker} />
+            {GlobeAside && <GlobeAside context={context} geography={geography} />}
+          </div>
+          <p className="wanderer-globe__summary">{copy.mappedCount(geography.mappedCount, geography.markers.length)}</p>
+        </aside>
       </div>
     </div>
   );

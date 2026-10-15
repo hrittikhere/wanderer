@@ -24,6 +24,8 @@
 - Globe markers are merged once from all talks and narrowed for search and filters, so a location keeps its id, label and open panel while its host talk is filtered out, and the globe is not rebuilt. A host without a location takes the first label among its merged talks; `mergeDistanceKm: 0` merges both encodings of an antimeridian or pole point.
 - `deriveGeography` buckets hosts in a spatial grid: time grows with the number of talks, not talks times locations.
 - Search and filter changes filter the list in a deferred render, so typing stays responsive with long lists. Refilling an emptied globe remounts the loaded renderer without a loading pass.
+- Stylesheet: the search field border reaches 3:1 contrast (new `--wanderer-input-border` token); text fields stay at 16px on touch devices so iOS does not zoom; the full-photo link meets the 44px touch target; the nearest `data-wanderer-scheme` hint wins when hints are nested; milestone dots stay on their markers in RTL; long location and region names wrap; the beside callout no longer covers the globe controls; the Dismiss focus ring is not clipped; the RTL callout entrance follows the component's direction; every transition follows `--wanderer-easing`.
+- The globe stage and its controls precede the location panel in the DOM, so focus order matches the layout at every width (wide layouts place the panel in the first column with CSS grid).
 
 All notable changes to `@wanderer/talks` are recorded here. The format follows Keep a Changelog, and the project follows Semantic Versioning.
 
