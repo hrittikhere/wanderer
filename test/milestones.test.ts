@@ -1,9 +1,9 @@
 import { describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import {
   MILESTONE_ENTER_THRESHOLD, MILESTONE_EXIT_THRESHOLD, MILESTONE_QUEUE_START_DELAY_MS, MilestoneTracker, milestoneThresholds,
 } from '../src/globe/milestones.js';
-import { THETA } from '../src/globe/projection.js';
+import { THETA, projectMarker } from '../src/globe/projection.js';
 
 const milestone = (id: string, lat: number, lng: number) => ({ id, title: id, coordinates: [lat, lng] as [number, number] });
 
@@ -40,6 +40,13 @@ describe('milestoneThresholds', () => {
     assert.equal(milestoneThresholds(-90), null);
     assert.equal(milestoneThresholds(-80), null);
   });
+
+  test('the exit threshold never drops below the limb, where the dot is already hidden', () => {
+    for (let lat = -70; lat <= -60; lat += 0.25) {
+      const thresholds = milestoneThresholds(lat);
+      if (thresholds) assert.ok(thresholds.exit >= 0, `${lat}: exit ${thresholds.exit} is not behind the globe`);
+    }
+  });
 });
 
 describe('MilestoneTracker', () => {
@@ -59,5 +66,29 @@ describe('MilestoneTracker', () => {
   test('a south-polar milestone never activates and never blocks the others', () => {
     const tracker = new MilestoneTracker([milestone('pole', -90, 0), milestone('sydney', -33.87, 151.21)]);
     assert.deepEqual(rotateOnce(tracker), ['sydney']);
+  });
+
+  test('a callout is dismissed as soon as its dot passes behind the globe, even within the minimum dwell', () => {
+    // Palmer Station's thresholds sit just above the limb; a fast turn (a flick) carries it behind within the dwell.
+    for (const [id, lat, lng] of [['palmer', -64.77, -64.05], ['lisbon', 38.72, -9.14]] as const) {
+      const tracker = new MilestoneTracker([milestone(id, lat, lng), milestone('queued', lat, lng + 1)]);
+      let now = MILESTONE_QUEUE_START_DELAY_MS + 1;
+      let hiddenWhileActive = 0;
+      let activations = 0;
+      for (let phi = 0; phi <= Math.PI * 8; phi += 0.02) {
+        now += 16;
+        if (tracker.update({ phi, now, sceneReadyAt: 0, interacting: false, lastInteractionAt: -10000 }).activated) activations += 1;
+        const active = tracker.active ? tracker.find(tracker.active) : undefined;
+        if (active && projectMarker(active.coordinates[0], active.coordinates[1], phi).sz <= 0) hiddenWhileActive += 1;
+      }
+      assert.ok(activations > 0, `${id} activates`);
+      assert.equal(hiddenWhileActive, 0, `${id}: no frame shows a callout whose dot is on the far side`);
+    }
+  });
+
+  test('a repeated milestone id is tracked once, keeping the first milestone', () => {
+    const tracker = new MilestoneTracker([milestone('dup', 10, 0), milestone('dup', 10, 180)]);
+    assert.deepEqual(rotateOnce(tracker), ['dup'], 'one activation per rotation, not one per copy');
+    assert.deepEqual(tracker.find('dup')?.coordinates, [10, 0]);
   });
 });

@@ -18,6 +18,6 @@ npm ci --prefix examples/next
 npm --prefix examples/next run dev
 ```
 
-Its server page validates data, then hands serializable props to a client adapter containing the globe and Next Link integration. The fixed reference date keeps SSR deterministic. Rebuild the library after changing `src/`.
+Its server page validates data, computes the reference date in a `'use cache'` scope (enabled by `cacheComponents: true` in `next.config.ts`, as the README pattern requires) and hands serializable props to a client adapter containing the globe and Next Link integration. Rebuild the library after changing `src/`.
 
-`npm run test:package` installs a packed tarball into isolated copies of both apps, then builds them. It also bundles a list-only consumer with no `cobe` installed. `npm run test:browser` runs the Vite app in Chromium; install the browser first with `npx playwright install chromium`.
+`npm run test:package` installs a packed tarball into isolated copies of both apps, then builds them; the fixtures are removed after a passing run (set `WANDERER_KEEP_FIXTURES=1` to keep them). It also bundles a list-only consumer with no `cobe` installed. `npm run test:browser` runs the Vite app in Chromium; install the browser first with `npx playwright install chromium`.

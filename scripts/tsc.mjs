@@ -1,7 +1,8 @@
-// Runs the TypeScript 7 (native) CLI by explicit path. `node_modules/.bin/tsc`
-// cannot be trusted in this monorepo: a transitive typescript@6 also ships a
-// `tsc` bin and npm links whichever wins. Resolving `typescript/package.json`
-// from this file finds the hoisted TypeScript 7 regardless of install layout.
+// Runs the TypeScript 7 (native) CLI by explicit path with the current Node
+// binary, so no shell, `.bin` link or platform shim decides which `tsc` runs.
+// Resolving `typescript/package.json` from this file finds the project's
+// TypeScript regardless of install layout; the major check below fails fast
+// if an older compiler is installed instead.
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';

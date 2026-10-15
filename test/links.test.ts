@@ -1,5 +1,5 @@
 import { describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { DEFAULT_PRIMARY_LINK_PRECEDENCE, getPrimaryLink, getTalkLinks, safeUrl } from '../src/helpers.js';
 import { resolveLinkPolicy } from '../src/components/TalkLink.js';
 import { talk } from './support/fixtures.js';
@@ -20,6 +20,14 @@ describe('safeUrl', () => {
     ]) {
       assert.equal(safeUrl(value), undefined, `${value} must be rejected`);
     }
+  });
+
+  test('rejects http(s) without the // authority marker, which browsers resolve against the page', () => {
+    for (const value of ['https:example.test', 'https:/example.test', 'HTTP:/EXAMPLE', 'https:sched.example.com/event/1', 'http:example.test']) {
+      assert.equal(safeUrl(value), undefined, `${value} must be rejected`);
+      assert.equal(safeUrl(value, { allowRelative: true }), undefined, `${value} must be rejected for detail links too`);
+    }
+    assert.equal(safeUrl('HTTPS://example.test/x'), 'HTTPS://example.test/x');
   });
 
   test('rejects whitespace, control characters, and backslashes inside the URL', () => {
@@ -164,6 +172,16 @@ describe('resolveLinkPolicy', () => {
     assert.equal(policy.target, '_self');
     assert.equal(policy.rel, 'nofollow');
     assert.deepEqual(resolveLinkPolicy('recording', { recording: { target: '_self' } }), { target: '_self', rel: '' });
+  });
+
+  test('target keywords match case-insensitively, as in HTML', () => {
+    for (const target of ['_BLANK', '_Blank']) {
+      const policy = resolveLinkPolicy('general', { general: { target } });
+      assert.equal(policy.target, target);
+      assert.deepEqual(policy.rel.split(' ').sort(), ['noopener', 'noreferrer'], target);
+    }
+    assert.equal(resolveLinkPolicy('event', { event: { target: '_BLANK', rel: 'nofollow' } }).rel, 'nofollow noopener');
+    assert.equal(resolveLinkPolicy('event', { event: { target: '_SELF', rel: 'nofollow' } }).rel, 'nofollow');
   });
 
   test('a detail policy that opts into _blank gets protection too', () => {

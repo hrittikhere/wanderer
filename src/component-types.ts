@@ -10,15 +10,23 @@ export type Density = 'comfortable' | 'compact';
 export type GroupingMode = 'separate' | 'duplicate' | 'none';
 export type BuiltinFilterId = 'recording' | 'upcoming' | 'online' | 'in-person' | 'hybrid';
 export type FilterId = BuiltinFilterId | (string & {});
+/**
+ * Inline `--wanderer-*` custom properties. React writes custom properties as
+ * they are, so a number gets no unit: use numbers only for unitless tokens
+ * (`--wanderer-line-height`, `--wanderer-z-overlay`) and strings with units
+ * for lengths, durations and colors.
+ */
 export type ThemeTokens = Partial<Record<`--wanderer-${string}`, string | number>>;
 
 /**
  * Why a view changed.
- * - initial: the first resolution of a responsive default after hydration.
+ * - initial: the first resolution after hydration in uncontrolled mode (including the first responsive
+ *   pick), or a `defaultView`/`enabledViews` change that re-resolves the default.
  * - user: an explicit action inside the component (toggle, Escape, gesture); focus moves to the view heading.
  * - responsive: the breakpoint crossed and the user had not chosen a view yet.
  * - unavailable: the requested view is disabled or missing, so the first available view is shown.
- * - controlled: the `view` prop changed.
+ * - controlled: the first resolution while the `view` prop is set. Later changes of the prop are not
+ *   reported; requests from inside the component arrive with their own reason.
  */
 export type ViewChangeReason = 'initial' | 'user' | 'responsive' | 'unavailable' | 'controlled';
 export interface ViewChange {
@@ -43,11 +51,14 @@ export interface TalksCopy {
   onlineFilter: string;
   inPersonFilter: string;
   hybridFilter: string;
-  clearFilters: string;
+  /** @deprecated Never rendered (the reset control uses `resetAll`) and ignored. Removed in the next minor release. */
+  clearFilters?: string;
   resetAll: string;
   upcoming: string;
   upcomingBadge: string;
   undated: string;
+  /** Shown in a talk card's margin in place of the month abbreviation when the talk has no valid date. */
+  undatedMonth: string;
   noTalks: string;
   noTalksDescription: string;
   noMatches: string;
@@ -58,13 +69,17 @@ export interface TalksCopy {
   noMappedTalks: string;
   noMappedDescription: string;
   useList: string;
-  backToList: string;
+  /** @deprecated Never rendered (the fullscreen exit uses `exitFullscreen`) and ignored. Removed in the next minor release. */
+  backToList?: string;
   exitFullscreen: string;
   regions: string;
   locations: string;
   unassignedRegion: string;
   unknownLocation: string;
+  /** Names the interactive globe stage. */
   globeLabel: string;
+  /** Names the panel with the region and location lists beside the globe. */
+  globePanelLabel: string;
   globeHint: string;
   milestones: string;
   chooseMilestone: string;
@@ -79,7 +94,8 @@ export interface TalksCopy {
   detailAction: string;
   generalAction: string;
   online: string;
-  inPerson: string;
+  /** @deprecated Never rendered (in-person talks get no format badge) and ignored. Removed in the next minor release. */
+  inPerson?: string;
   hybrid: string;
   validationError: string;
   pluginError: string;
@@ -89,12 +105,17 @@ export interface TalksCopy {
   locationCount: (count: number) => string;
   regionPercentage: (percentage: number) => string;
   actionLabel: (action: string, title: string) => string;
+  /** Announced when the visitor picks a milestone in the select. */
+  milestoneShown: (title: string) => string;
 }
+
+/** Copy overrides. Keys left out, `undefined` or `null` keep the English default. */
+export type CopyOverrides = { [K in keyof TalksCopy]?: TalksCopy[K] | null | undefined };
 
 export type LinkComponentProps = AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; children?: ReactNode };
 
 export interface LinkPolicy {
-  /** `_blank` opens a new tab; `undefined` or `_self` stays in the window. */
+  /** `_blank` opens a new tab; `undefined` or `_self` stays in the window. Keywords match case-insensitively, as in HTML. */
   target?: '_self' | '_blank' | (string & {});
   /** Explicit rel. With no rel, `_blank` links get `noopener noreferrer`; a rel lacking both gets `noopener` appended. */
   rel?: string;
@@ -104,7 +125,7 @@ export interface NavigationOptions {
   /** Rendered instead of `<a>` for the kinds in `linkComponentKinds` (default: detail links). */
   LinkComponent?: ComponentType<LinkComponentProps>;
   linkComponentKinds?: readonly LinkKind[];
-  /** Called for unmodified primary clicks on same-window links; the default navigation is prevented. */
+  /** Called for unmodified primary clicks on same-window links without a `download` attribute; the default navigation is prevented. */
   onNavigate?: (link: TalkLink, talk: Talk | undefined, event: MouseEvent<HTMLAnchorElement>) => void;
   /** Per-kind target/rel. Defaults: detail stays in the window, everything else opens a new tab. */
   policies?: Partial<Record<LinkKind, LinkPolicy>>;
@@ -159,7 +180,7 @@ export interface GlobeAsideProps {
 export interface TalksSlots {
   SearchInput?: ComponentType<SearchSlotProps>;
   GlobeOverlayCard?: ComponentType<GlobeOverlayCardProps>;
-  /** Extra instance-scoped content rendered inside the globe panel beside the location list. */
+  /** Extra instance-scoped content rendered inside the globe panel, below the region and location lists. */
   GlobeAside?: ComponentType<GlobeAsideProps>;
   /** Content layered over the globe stage (absolutely positioned by the consumer's CSS). */
   GlobeStageOverlay?: ComponentType<GlobeAsideProps>;
@@ -178,6 +199,12 @@ export interface TalkViewProps {
   active: boolean;
   headingId: string;
   viewId: string;
+  /**
+   * How the shell presents the view right now. `immersive` only inside the
+   * fullscreen dialog: an immersive view shows inline before hydration, for
+   * the responsive default, and without an inline view to exit to.
+   */
+  presentation?: 'inline' | 'immersive';
 }
 
 export interface ViewContribution {
@@ -186,11 +213,19 @@ export interface ViewContribution {
   /** Empty strings fall back to copy for the reserved `list` and `globe` ids. */
   label: string;
   heading?: string;
-  /** Fullscreen dialog, including the toolbar. Falls back to inline without an exit view. */
+  /**
+   * Fullscreen dialog, including the toolbar, once the visitor or the consumer
+   * chooses the view. Shown inline before hydration, when it is only the
+   * responsive default, and without an inline view to exit to.
+   */
   presentation?: 'inline' | 'immersive';
   icon?: ReactNode;
   Component: ComponentType<TalkViewProps>;
-  /** Invoked when the view is about to be shown; useful for lazy chunks. */
+  /**
+   * Called speculatively on pointer enter and focus of the view's toggle, to warm a lazy chunk.
+   * Not called when the view is shown another way (setView, Escape, the responsive pick, the
+   * `view` prop), so the view must also load what it needs itself, for example in an effect.
+   */
   preload?: () => Promise<unknown>;
 }
 
@@ -215,7 +250,7 @@ export interface ActionContribution {
   when?: (talk: Talk) => boolean;
   /** Rendered as a link through the navigation options when present. */
   getLink?: (talk: Talk) => TalkLink | undefined;
-  /** Rendered as a button when no link is returned. */
+  /** Rendered as a button when no link is returned. With neither a link nor `onAction`, the action is skipped for that talk. */
   onAction?: (talk: Talk, context: TalksContext) => void;
   icon?: ReactNode;
 }
@@ -282,10 +317,18 @@ export interface TalksContext {
   views: readonly ResolvedView[];
   setView: (view: string, reason?: ViewChangeReason) => void;
   viewHeadingId: (view: string) => string;
+  /**
+   * The search and filters the current `talks` reflect. While a long list
+   * re-renders after a keystroke they can trail the field by one render; the
+   * setters always apply to the latest value.
+   */
   search: string;
-  setSearch: (value: string) => void;
+  /** Accepts a value or a function of the latest value. */
+  setSearch: (value: string | ((previous: string) => string)) => void;
   filters: readonly string[];
-  setFilters: (value: readonly string[]) => void;
+  /** Accepts a value or a function of the latest value, so several updates in one handler compose. */
+  setFilters: (value: readonly string[] | ((previous: readonly string[]) => readonly string[])) => void;
+  /** Adds or removes one id from the latest filters; two calls in one handler compose. */
   toggleFilter: (id: string) => void;
   availableFilters: readonly FilterContribution[];
   hasActiveFilters: boolean;
@@ -296,6 +339,7 @@ export interface TalksContext {
   getPrimaryLink: (talk: Talk) => TalkLink | undefined;
   getActions: (talk: Talk) => TalkAction[];
   renderTalk: (talk: Talk, group?: TalkGroup) => ReactNode;
+  /** Renders through `TalkLinkAnchor`. `href`, `target` and `rel` in `props` are ignored: they come from the link and its kind policy. */
   renderLink: (link: TalkLink, children: ReactNode, talk?: Talk, props?: AnchorHTMLAttributes<HTMLAnchorElement>) => ReactNode;
   navigation: NavigationOptions;
   milestones: readonly Milestone[];
@@ -305,7 +349,7 @@ export interface TalksContext {
 }
 
 export interface ResponsiveViews {
-  /** Minimum width in CSS pixels for the large view. Default 1024. */
+  /** Minimum width in CSS pixels for the large view. Default `DEFAULT_BREAKPOINT` (1024); a value that is not a positive number falls back to it. */
   breakpoint?: number;
   small: string;
   large: string;
@@ -318,7 +362,7 @@ export interface TalksProps {
   plugins?: readonly TalksPlugin[];
   /** Additional views registered beside the built-in list (for example `globeView()`). */
   views?: readonly ViewContribution[];
-  copy?: Partial<TalksCopy>;
+  copy?: CopyOverrides | undefined;
   locale?: string;
   dateFormat?: Intl.DateTimeFormatOptions;
   direction?: TextDirection;
@@ -335,12 +379,15 @@ export interface TalksProps {
   defaultView?: string;
   enabledViews?: readonly string[];
   responsive?: ResponsiveViews;
-  view?: string;
+  /** Controlled view id; `undefined` leaves the view uncontrolled. */
+  view?: string | undefined;
   onViewChange?: (view: string, change: ViewChange) => void;
-  search?: string;
+  /** Controlled search text; `undefined` leaves the search uncontrolled. */
+  search?: string | undefined;
   defaultSearch?: string;
   onSearchChange?: (search: string) => void;
-  filters?: readonly FilterId[];
+  /** Controlled active filter ids; `undefined` leaves the filters uncontrolled. Ids that no offered filter matches are kept but have no effect. */
+  filters?: readonly FilterId[] | undefined;
   defaultFilters?: readonly FilterId[];
   onFiltersChange?: (filters: readonly FilterId[]) => void;
   /** Built-in filters to offer. Default: recording and upcoming. */

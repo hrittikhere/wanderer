@@ -1,6 +1,7 @@
 // Verifies the built package in dist/ against the public contract:
 //   - every documented entry resolves through import() and require()
-//   - declaration files exist for every entry
+//   - declaration files exist for every entry, per condition (ESM and CommonJS)
+//     and through typesVersions for node10 resolution
 //   - "use client" directives are exactly where they belong
 //   - the static import graph of the root, list, and helpers entries never
 //     reaches dist/esm/globe/** or the bare specifier "cobe"
@@ -31,6 +32,7 @@ const entries = {
     'validateTalks', 'filterTalks', 'groupTalks', 'sortTalks', 'parseCalendarDate', 'formatCalendarDate', 'isUpcoming', 'classifyTalkDate',
     'talkYear', 'normalizeSearch', 'safeUrl', 'getTalkLinks', 'getPrimaryLink', 'DEFAULT_PRIMARY_LINK_PRECEDENCE', 'locationLabel', 'locationParts',
     'validCoordinates', 'resolveTalkCoordinates', 'geographicDistanceKm', 'deriveGeography', 'compareIds', 'registerPlugins', 'collectContributions',
+    'DEFAULT_BREAKPOINT',
   ],
   './list': ['ListView', 'listView', 'TalkCard', 'Toolbar', 'TalkGroupSection', 'EmptyState', 'TalkLinkAnchor', 'resolveLinkPolicy', 'Heading'],
   './globe': ['GlobeView', 'globeView', 'preloadGlobeView', 'GlobeRegionList'],
@@ -39,11 +41,22 @@ const resolvedEntries = {};
 for (const [entry, expectedExports] of Object.entries(entries)) {
   const target = manifest.exports[entry];
   if (!target || typeof target !== 'object') { problem(`package.json exports is missing "${entry}"`); continue; }
-  const esmPath = path.join(packageRoot, target.import);
-  const cjsPath = path.join(packageRoot, target.require);
-  const typesPath = path.join(packageRoot, target.types);
-  resolvedEntries[entry] = { esmPath, cjsPath, typesPath };
-  if (!existsSync(typesPath)) problem(`${entry}: types file ${target.types} is missing`);
+  // Each condition carries its own declarations, listed first so TypeScript picks them.
+  const conditions = [target.import, target.require];
+  if (!conditions.every((condition) => condition && Object.keys(condition).join() === 'types,default')) {
+    problem(`exports["${entry}"] must map import and require to { types, default }`);
+    continue;
+  }
+  const esmPath = path.join(packageRoot, target.import.default);
+  const cjsPath = path.join(packageRoot, target.require.default);
+  const typesPath = path.join(packageRoot, target.import.types);
+  const cjsTypesPath = path.join(packageRoot, target.require.types);
+  resolvedEntries[entry] = { esmPath, cjsPath, typesPath, cjsTypesPath };
+  for (const types of [target.import.types, target.require.types]) {
+    if (!existsSync(path.join(packageRoot, types))) problem(`${entry}: types file ${types} is missing`);
+  }
+  // dist/cjs/package.json makes these CommonJS declarations; anywhere else they would read as ESM.
+  if (path.dirname(cjsTypesPath) !== path.dirname(cjsPath)) problem(`${entry}: require types ${target.require.types} must sit next to ${target.require.default}`);
   try {
     const esm = await import(pathToFileURL(esmPath).href);
     for (const name of expectedExports) if (!(name in esm)) problem(`${entry} (esm) does not export ${name}`);
@@ -145,10 +158,18 @@ for (const dir of [esmDir, cjsDir]) {
 if (!cobeReference.test(readFileSync(path.join(esmDir, 'globe', 'renderer.js'), 'utf8'))) problem('esm/globe/renderer.js must import cobe');
 
 // 5. package.json consistency.
+const exportTargets = (target) => (typeof target === 'string' ? [target] : Object.values(target).flatMap(exportTargets));
 for (const [entry, target] of Object.entries(manifest.exports)) {
-  const targets = typeof target === 'string' ? [target] : Object.values(target);
-  for (const file of targets) {
+  for (const file of exportTargets(target)) {
     if (!existsSync(path.join(packageRoot, file))) problem(`exports["${entry}"] target ${file} does not exist`);
+  }
+}
+// moduleResolution node10 ignores exports; typesVersions is how it finds subpath declarations.
+for (const entry of Object.keys(entries).filter((name) => name !== '.')) {
+  const mapped = manifest.typesVersions?.['*']?.[entry.slice(2)];
+  if (!mapped?.length) problem(`typesVersions["*"] is missing "${entry.slice(2)}"`);
+  for (const file of mapped ?? []) {
+    if (!existsSync(path.join(packageRoot, file))) problem(`typesVersions["*"]["${entry.slice(2)}"] target ${file} does not exist`);
   }
 }
 for (const field of ['main', 'module', 'types']) {
@@ -163,6 +184,25 @@ for (const file of manifest.files ?? []) {
   if (!existsSync(path.join(packageRoot, file))) problem(`package.json files entry ${file} does not exist (npm would skip it silently)`);
 }
 if (!existsSync(path.join(cjsDir, 'package.json'))) problem('dist/cjs/package.json ({"type":"commonjs"}) is missing');
+if (manifest.name.startsWith('@') && manifest.publishConfig?.access !== 'public') problem('scoped package needs publishConfig.access "public" (npm defaults scopes to restricted)');
+// Source maps and relative Markdown links must resolve to files the tarball ships.
+const shipped = (file) => (manifest.files ?? []).includes(path.relative(packageRoot, file).split(path.sep)[0]) && existsSync(file);
+for (const file of readdirSync(distDir, { recursive: true })) {
+  if (!file.endsWith('.map')) continue;
+  const mapPath = path.join(distDir, file);
+  const map = JSON.parse(readFileSync(mapPath, 'utf8'));
+  map.sources.forEach((source, index) => {
+    if (typeof map.sourcesContent?.[index] === 'string') return;
+    if (!shipped(path.resolve(path.dirname(mapPath), map.sourceRoot ?? '', source))) problem(`dist/${file} maps to ${source}, which the package does not ship`);
+  });
+}
+const markdown = ['README.md', ...readdirSync(path.join(packageRoot, 'docs')).filter((name) => name.endsWith('.md')).map((name) => path.join('docs', name))];
+for (const doc of markdown) {
+  for (const [, href] of readFileSync(path.join(packageRoot, doc), 'utf8').matchAll(/\]\(([^)\s]+)\)/g)) {
+    if (/^(?:[a-z][\w+.-]*:|#)/i.test(href)) continue;
+    if (!shipped(path.resolve(packageRoot, path.dirname(doc), href.split('#')[0]))) problem(`${doc} links to ${href}, which the package does not ship`);
+  }
+}
 
 // 6. Sizes.
 function sizeOf(files) {

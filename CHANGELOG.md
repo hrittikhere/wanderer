@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Replacing a sparse talks array with populated data now recomputes validation and results; empty slots no longer make shallow comparison retain stale input.
+- Reject empty slots in plugin and contribution arrays with the same diagnostic as explicit `undefined` entries, including contributions that flattening previously discarded.
 - Constrain cobe to the compatible 0.6.5 API and align Node engines, portable test discovery and CI.
 - Set the missing cobe base-brightness uniform explicitly, fixing a black globe caused by a NaN shader value.
 - Put fullscreen navigation inside a native dialog with an explicit exit, focus containment and background scroll locking.
@@ -10,6 +12,47 @@
 - Reject unsafe links from plugin actions and direct `TalkLinkAnchor` usage before reaching routers.
 - Add runnable Vite and Next.js examples, packed-consumer production builds, bundle budgets, browser regression tests and axe checks in CI.
 - Correct installation, fallback, SSR and integration documentation to match the tested behavior.
+- Fix the CommonJS build's globe: the renderer unwraps `cobe`'s default export, which the CommonJS interop bound to the module namespace. `npm test` now mounts the globe from both built copies.
+- Share one React context between the ESM and CommonJS copies, so `useTalks` works across the dual-package boundary.
+- Ship per-condition declarations (`dist/cjs/*.d.ts` for `require`), `typesVersions` for `node10` resolution, the `src` files the source maps reference, and `publishConfig.access: public`. The package-smoke check compiles a TypeScript 5.0 consumer under every resolution mode.
+- `engines` now states the runtime floor (Node 20 or later) instead of the test toolchain's range, which moved to `devEngines`.
+- The globe renderer keeps one WebGL globe per mount and updates its markers in place, removes cobe's window resize listener and releases its WebGL context on unmount, so searching and switching views no longer leak contexts.
+- The globe intro advances on rendered frames, so a globe mounted hidden or offscreen plays it later and lands on the busiest location; the sketch now honors `--wanderer-globe-reveal-duration`.
+- Idle rotation is time-based (the same speed at any refresh rate), the drawing buffer follows `devicePixelRatio` changes, and a second pointer no longer resets or ends a drag.
+- At most 64 markers are drawn (the busiest), matching cobe's limit; hover only finds drawn markers.
+- The hover tooltip can be dismissed with Escape, stays dismissed until the pointer leaves the marker, can be hovered, and is positioned by its rendered width.
+- Milestone callouts close as soon as their dot turns behind the globe; repeated milestone ids keep the first milestone.
+- `parseCssColor` rejects malformed channels instead of returning NaN and runs in linear time.
+- Globe markers are merged once from all talks and narrowed for search and filters, so a location keeps its id, label and open panel while its host talk is filtered out, and the globe is not rebuilt. A host without a location takes the first label among its merged talks; `mergeDistanceKm: 0` merges both encodings of an antimeridian or pole point.
+- `deriveGeography` buckets hosts in a spatial grid: time grows with the number of talks, not talks times locations.
+- Search and filter changes filter the list in a deferred render, so typing stays responsive with long lists. Refilling an emptied globe remounts the loaded renderer without a loading pass.
+- Stylesheet: the search field border reaches 3:1 contrast (new `--wanderer-input-border` token); text fields stay at 16px on touch devices so iOS does not zoom; the full-photo link meets the 44px touch target; the nearest `data-wanderer-scheme` hint wins when hints are nested; milestone dots stay on their markers in RTL; long location and region names wrap; the beside callout no longer covers the globe controls; the Dismiss focus ring is not clipped; the RTL callout entrance follows the component's direction; every transition follows `--wanderer-easing`.
+- The globe stage and its controls precede the location panel in the DOM, so focus order matches the layout at every width (wide layouts place the panel in the first column with CSS grid).
+- Fullscreen follows the browser: when the browser closes the dialog itself (repeated Escape with `escapeToList={false}` or an `isModalOpen` veto, the Android back gesture), the component returns to the inline view instead of hiding everything; a controlled parent that declines gets the dialog back.
+- Fullscreen opens only for a view the visitor or the consumer chose, and only after hydration: an immersive view that is the `responsive` default, on load or after a breakpoint crossing, shows inline (and is visible in the server HTML); choosing it opens fullscreen. `TalkViewProps.presentation` and the `wanderer-globe--inline`/`--immersive` modifier report the presentation in effect.
+- Escape is held back only by text fields that have text, and clears only the component's own search field (including a text-type `SearchInput` slot); checkboxes and ranges no longer swallow it, and a plugin's own search field no longer clears the component's search.
+- Choosing the view that is already shown no longer leaves a focus request that a later controlled change would act on.
+- The fullscreen scroll lock also covers hosts that scroll `body`, and the shell stacks at `--wanderer-z-overlay` where `showModal()` is unavailable.
+- `toggleFilter`, and `setSearch`/`setFilters` (which now accept a function of the latest value), compose when called several times in one handler, in controlled and uncontrolled mode; `useControllable` returns a stable setter with the same function form.
+- Plugin filter predicates that throw exclude the talks they threw on and are logged once; a throwing `SearchInput` slot shows `copy.pluginError` while the toolbar keeps working; views and renderers that throw during server rendering fall back to client rendering instead of failing the page.
+- Inline `plugins`, `views`, `enabledViews`, `builtinFilters`, `slots`, `copy` and `talks` literals that equal the previous render item by item keep the memoized results; the result announcement no longer restarts on unrelated parent renders and only re-renders its own live region.
+- `onValidation` fires when the result changes, not for a new callback identity, and not while a parent stores the result with stable talks; the strict validation alert reports no view.
+- `enabledViews` that matches no view, a repeated id in `views` (other than replacing `list`), and view ids with whitespace now throw clear errors; `registerPlugins` names a non-object entry.
+- Trackpad gestures reset after a 300 ms pause and ignore wheel input over horizontally scrollable content.
+- A lone combining accent is not an active search; `mergeCopy` ignores `null` as well as `undefined`; group heading ids stay unique when list pieces render in two shells or views.
+- `globeView()` returns the same component for equal options, so an inline `views={[globeView()]}` no longer remounts the globe on every parent render. `GlobeView` works directly as a view component (`options` defaults to `{}`).
+- The WebGL context-loss grace period counts only while the globe is visible and is cleared when the renderer is replaced, so a hidden tab or an emptied and refilled marker set no longer ends in a false runtime fallback.
+- Milestone coordinates are validated like a talk's; keyboard focus inside a milestone card holds it open and Dismiss moves focus to the select; a milestone chosen in the select is announced; the placeholder no longer pauses motion.
+- The globe panel has its own name (`copy.globePanelLabel`), the drag hint disappears under the fallbacks, only the open location panel renders its talks, the location list skips re-rendering on milestone changes, and the visibility subscription is no longer renewed on every render.
+- Types: `view`, `search`, `filters` and `copy` (now `CopyOverrides`) accept an explicit `undefined` under `exactOptionalPropertyTypes`; `ToolbarProps`, `HeadingProps`, `ErrorBoundaryProps`, `GlobeViewProps` and `ControllableUpdate` are exported, and `Toolbar` gained optional `search`, `filters` and `hasActiveFilters` props.
+- The boundaries that contain server-side throws in views and custom renderers hydrate on React 18 as well as 19: they keep the props they hydrated with until a deferred render after hydration, so React 18 keeps their server HTML instead of reporting "This Suspense boundary received an update before it finished hydrating". A custom `responsive.breakpoint` emits its inline rule as raw CSS, so React 18 no longer escapes its quotes (which showed both shells before hydration and failed hydration); a breakpoint that is not a positive number falls back to 1024.
+- `useColorScheme` follows a `data-wanderer-scheme` hint that appears, changes or moves after mount, and reads it from the current root after a strict validation error clears. Without a ref it reads the hint on `<html>`.
+- `DEFAULT_BREAKPOINT` moved to the helpers module, so Server Components can import it as a number; it is still exported from the root entry.
+- Tests: hydration checks fail on attribute mismatches (reported only through `console.error`), on exceptions that reach the window, and run with `MutationObserver` and controllable `IntersectionObserver`/`ResizeObserver` fakes; a browser test checks pre-hydration shell visibility and clean hydration of server HTML; `test:compat` covers a custom breakpoint, a dark OS and a plugin renderer on React 18 and 19.
+- Deprecated the copy keys `clearFilters`, `backToList` and `inPerson`: nothing renders them, so they are optional, ignored and no longer in `createDefaultCopy()`. Removed the unreachable `renderMarkerTooltip` from `GlobeRendererProps` (no view or option could set it).
+- Docs: connector lines follow the measured space beside the stage, not `context.breakpoint`; the SSR page classifies every prop for Server Components; the `globeView` options (`intro`, `autoRotate`, `label`, `heading`, `order`) are documented; the `ViewChangeReason`, `preload` and `GlobeAside` comments match the behavior; samples import the hooks they call. A docs test keeps the copy table, entry tables, prop lists and option table in step with the code.
+- Examples: the Vite example dedupes React, so its production build no longer bundles a second copy from the linked repository; it honors `?theme=system` and its page follows the chosen appearance. The Next.js example enables `cacheComponents` and computes the reference date in a `'use cache'` scope, so `test:package` builds the README pattern; the docs now say that `'use cache'` needs the flag.
+- CI and scripts: the suite also runs on Node 26; actions are pinned to commit SHAs; `test:compat` covers React 18.2.0, runs in a private temp directory, reports why an install failed, and forces React's development build for its checks; `test:package` removes its fixtures after a passing run and copies the examples correctly from any checkout path; both run npm on Windows; the browser tests use their own port instead of Vite's preview port.
 
 All notable changes to `@wanderer/talks` are recorded here. The format follows Keep a Changelog, and the project follows Semantic Versioning.
 

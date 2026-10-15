@@ -1,4 +1,5 @@
-/* @wanderer/talks — plain CSS, scoped to .wanderer. No global element styles.
+/* @wanderer/talks — plain CSS, scoped to .wanderer. No global element styles
+   except one html:has() rule that locks scrolling while the fullscreen dialog is open.
    Tokens are documented in docs/styling.md. Precedence (lowest to highest):
    defaults below -> theme palette (data-wanderer-theme / system preference /
    data-wanderer-scheme host hint) -> consumer CSS overrides -> per-instance
@@ -33,6 +34,8 @@
   --wanderer-control-bg: #ffffff;
   --wanderer-control-text: #18181b;
   --wanderer-control-border: #c9c9d1;
+  /* Text field boundary: at least 3:1 against the field and the page (WCAG 1.4.11). */
+  --wanderer-input-border: #8a8a95;
   --wanderer-control-hover-bg: #f1f1f4;
   --wanderer-control-height: 2.75rem;
   --wanderer-focus-ring: #1f5ed6;
@@ -97,10 +100,14 @@
 }
 
 /* Dark palette. Applied for an explicit dark theme, for `system` when the OS
-   prefers dark, and for `system` under a host element that declares
-   data-wanderer-scheme="dark" (hosts that resolve the theme before hydration). */
+   prefers dark, and for `system` when the nearest ancestor that declares
+   data-wanderer-scheme says "dark" (hosts that resolve the theme before
+   hydration). The :where() exclusions make a nested light hint win over an
+   outer dark one, as useColorScheme does, for up to four nested hints, without
+   adding specificity. */
 .wanderer[data-wanderer-theme="dark"],
-[data-wanderer-scheme="dark"] .wanderer[data-wanderer-theme="system"] {
+[data-wanderer-scheme="dark"] .wanderer[data-wanderer-theme="system"]:not(:where([data-wanderer-scheme="dark"] [data-wanderer-scheme="light"] *)),
+:where([data-wanderer-scheme="dark"] [data-wanderer-scheme="light"]) [data-wanderer-scheme="dark"] .wanderer[data-wanderer-theme="system"]:not(:where([data-wanderer-scheme="dark"] [data-wanderer-scheme="light"] [data-wanderer-scheme="dark"] [data-wanderer-scheme="light"] *)) {
   --wanderer-bg: #09090b;
   --wanderer-surface: #141417;
   --wanderer-surface-raised: #1c1c21;
@@ -122,6 +129,7 @@
   --wanderer-control-bg: #141417;
   --wanderer-control-text: #f4f4f5;
   --wanderer-control-border: #42424c;
+  --wanderer-input-border: #71717c;
   --wanderer-control-hover-bg: #232329;
   --wanderer-focus-ring: #7fb0ff;
   --wanderer-overlay-bg: rgba(20, 20, 23, 0.9);
@@ -161,6 +169,7 @@
     --wanderer-control-bg: #141417;
     --wanderer-control-text: #f4f4f5;
     --wanderer-control-border: #42424c;
+    --wanderer-input-border: #71717c;
     --wanderer-control-hover-bg: #232329;
     --wanderer-focus-ring: #7fb0ff;
     --wanderer-overlay-bg: rgba(20, 20, 23, 0.9);
@@ -284,7 +293,7 @@
   min-block-size: var(--wanderer-control-height);
   padding-block: 0;
   padding-inline: calc(var(--wanderer-space-3) + 1.5rem) calc(var(--wanderer-space-3) + 1.5rem);
-  border: 1px solid var(--wanderer-control-border);
+  border: 1px solid var(--wanderer-input-border);
   border-radius: var(--wanderer-radius-full);
   background: var(--wanderer-control-bg);
   color: var(--wanderer-control-text);
@@ -307,7 +316,7 @@
 }
 
 .wanderer-search__input:hover {
-  border-color: var(--wanderer-border-strong);
+  border-color: var(--wanderer-text-subtle);
 }
 
 .wanderer-search__input:focus-visible {
@@ -637,6 +646,12 @@
   .wanderer-action { min-block-size: var(--wanderer-control-height); }
 }
 
+/* TalkLinkAnchor's text fallback for an unsafe URL: no pointer, hover or press feedback. */
+.wanderer-action[data-wanderer-unsafe] {
+  cursor: default;
+  pointer-events: none;
+}
+
 .wanderer-action__icon {
   flex: none;
   inline-size: 0.875rem;
@@ -812,6 +827,11 @@
   gap: var(--wanderer-space-3);
   padding-block: var(--wanderer-space-1);
   font-size: var(--wanderer-font-size-sm);
+}
+
+.wanderer-globe__region-name {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 
 .wanderer-globe__region-value,
@@ -1002,6 +1022,7 @@
   gap: var(--wanderer-space-2);
   padding: var(--wanderer-space-3) var(--wanderer-space-4);
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .wanderer-globe__tooltip-stats {
@@ -1119,7 +1140,12 @@
   font: inherit;
 }
 
-.wanderer-globe__dismiss { margin-block-end: var(--wanderer-space-2); }
+/* The callout scrolls, so leave room for the focus ring (3px forced-colors
+   outline plus 2px offset) on the sides where the button touches its edge. */
+.wanderer-globe__dismiss {
+  margin-block: 0.3125rem var(--wanderer-space-2);
+  margin-inline-start: 0.3125rem;
+}
 .wanderer-milestone__photo {
   display: inline-block;
   margin-block-start: var(--wanderer-space-2);
@@ -1127,12 +1153,33 @@
   font-size: var(--wanderer-font-size-xs);
 }
 
+/* Placed after the base rules above so these win by source order. */
+@media (pointer: coarse) {
+  .wanderer-milestone__photo {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--wanderer-control-height);
+  }
+
+  /* iOS Safari zooms the page when a focused field's text is below 16px. */
+  .wanderer-search__input,
+  .wanderer-globe__milestones select {
+    font-size: max(16px, var(--wanderer-font-size-sm));
+  }
+}
+
 @media (min-width: 1024px) {
   .wanderer-globe__layout {
     grid-template-columns: 20rem minmax(0, 1fr);
   }
 
+  /* The stage comes first in the DOM (and in focus order); side by side, the
+     location panel takes the first column. */
+  .wanderer-globe__stage-wrap { grid-column: 2; grid-row: 1; }
+
   .wanderer-globe__panel {
+    grid-column: 1;
+    grid-row: 1;
     position: sticky;
     inset-block-start: var(--wanderer-space-4);
     max-block-size: calc(100vh - var(--wanderer-space-6));
@@ -1147,6 +1194,9 @@
   inset-inline-start: 104%;
   inset-block-start: 42%;
   inline-size: 13rem;
+  /* End at the stage's bottom edge so a tall card scrolls instead of covering
+     the hint and controls below a short (immersive) stage. */
+  max-block-size: min(20rem, 58%);
   animation-name: wanderer-slide-in;
 }
 
@@ -1157,7 +1207,7 @@
   block-size: 7rem;
 }
 
-[dir="rtl"] .wanderer-globe__stage[data-wanderer-callout="beside"] .wanderer-globe__callout {
+.wanderer[dir="rtl"] .wanderer-globe__stage[data-wanderer-callout="beside"] .wanderer-globe__callout {
   animation-name: wanderer-slide-in-rtl;
 }
 
@@ -1166,6 +1216,8 @@
 .wanderer-shell--immersive {
   position: fixed;
   inset: 0;
+  /* Inert in the top layer; stacks above the page when showModal() is missing and only [open] is set. */
+  z-index: var(--wanderer-z-overlay);
   margin: 0;
   padding: clamp(1rem, 3vw, 2rem);
   inline-size: 100%;
@@ -1182,15 +1234,15 @@
 .wanderer-shell--immersive:not([open]) { display: none; }
 .wanderer-shell--immersive::backdrop { background: var(--wanderer-backdrop); }
 .wanderer-shell__close { align-self: end; }
-html:has(.wanderer-shell--immersive[open]) { overflow: hidden; }
+/* The document scroller is html in most layouts and body when a host makes body scroll. */
+html:has(.wanderer-shell--immersive[open]),
+html:has(.wanderer-shell--immersive[open]) body { overflow: hidden; }
 
 .wanderer-shell--immersive .wanderer-globe__stage {
   inline-size: min(100%, 60vh, var(--wanderer-globe-max-size));
 }
 
 @media (max-width: 1023.98px) {
-  .wanderer-globe__panel { order: 2; }
-  .wanderer-globe__stage-wrap { order: 1; }
   .wanderer-shell--immersive .wanderer-globe__stage {
     inline-size: min(100%, 44vh, var(--wanderer-globe-max-size));
   }
@@ -1305,8 +1357,8 @@ html:has(.wanderer-shell--immersive[open]) { overflow: hidden; }
   opacity: 1;
   transform: scale(1);
   transition:
-    opacity var(--wanderer-globe-reveal-duration, 920ms) ease-out,
-    transform var(--wanderer-globe-reveal-duration, 920ms) ease-out;
+    opacity var(--wanderer-globe-reveal-duration, 920ms) var(--wanderer-easing),
+    transform var(--wanderer-globe-reveal-duration, 920ms) var(--wanderer-easing);
 }
 
 .wanderer-globe__scene[data-wanderer-intro="particles"] .wanderer-globe__canvas {
@@ -1323,7 +1375,7 @@ html:has(.wanderer-shell--immersive[open]) { overflow: hidden; }
   inline-size: 100%;
   block-size: 100%;
   opacity: 1;
-  transition: opacity 220ms ease-out;
+  transition: opacity 220ms var(--wanderer-easing);
 }
 
 .wanderer-globe__scene[data-wanderer-intro="reveal"] .wanderer-globe__intro {
@@ -1347,7 +1399,7 @@ html:has(.wanderer-shell--immersive[open]) { overflow: hidden; }
   stroke-width: 1;
   stroke-dasharray: 4 3;
   opacity: 0;
-  transition: opacity 800ms ease;
+  transition: opacity 800ms var(--wanderer-easing);
 }
 
 .wanderer-globe__connector[data-wanderer-active="true"] {
@@ -1357,8 +1409,10 @@ html:has(.wanderer-shell--immersive[open]) { overflow: hidden; }
 
 .wanderer-globe__milestone-dot {
   position: absolute;
-  inset-inline-start: 0;
-  inset-block-start: 0;
+  /* Physical: the renderer writes projected pixels to left/top. A logical
+     inset would resolve to right: 0 in RTL and win over the inline left. */
+  left: 0;
+  top: 0;
   z-index: 1;
   inline-size: 10px;
   block-size: 10px;
@@ -1368,7 +1422,7 @@ html:has(.wanderer-shell--immersive[open]) { overflow: hidden; }
   transform: translate(-50%, -50%);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 800ms ease;
+  transition: opacity 800ms var(--wanderer-easing);
 }
 
 .wanderer-globe__milestone-dot[data-wanderer-active="true"] {

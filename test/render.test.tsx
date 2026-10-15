@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import { afterEach, before, beforeEach, describe, test } from 'node:test';
+import assert from './support/assert.js';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +24,7 @@ interface SsrObservations {
 describe('server rendering without browser globals', () => {
   let observed: SsrObservations;
 
-  beforeEach(() => {
+  before(() => {
     const result = spawnSync(process.execPath, ['--import', 'tsx', path.join(here, 'support', 'ssr-child.ts')], {
       encoding: 'utf8',
       cwd: path.resolve(here, '..'),
@@ -139,8 +139,7 @@ describe('renderToString markup', () => {
 
   test('duplicate ids never produce React key warnings and only the first entry renders', () => {
     const talks = [talk({ id: 'same', title: 'First' }), talk({ id: 'same', title: 'Second' }), talk({ id: 'same', title: 'Third' })];
-    const validations: unknown[] = [];
-    const html = renderToString(createElement(Talks, { talks, referenceDate: REFERENCE_DATE, onValidation: (result) => validations.push(result) }));
+    const html = renderToString(createElement(Talks, { talks, referenceDate: REFERENCE_DATE }));
     assert.ok(html.includes('First'));
     assert.equal(html.includes('Second'), false);
     assert.equal(html.includes('Third'), false);
@@ -160,6 +159,18 @@ describe('renderToString markup', () => {
     const html = renderToString(createElement(Talks, { talks, referenceDate: REFERENCE_DATE }));
     for (const label of ['Notes A', 'Notes B', 'Notes C', 'Notes D']) assert.ok(html.includes(label), `${label} renders`);
     assert.deepEqual(errors, [], 'no console.error (would include duplicate key warnings)');
+  });
+
+  test('blank link labels fall back to the default action text and accessible name', () => {
+    const talks = [talk({
+      id: 'blank', title: 'Blank labels', eventUrl: 'https://event.example',
+      links: [{ kind: 'general', url: 'https://a.example', label: '' }, { kind: 'slides', url: 'https://b.example', label: '   ' }],
+    })];
+    const html = renderToString(createElement(Talks, { talks, referenceDate: REFERENCE_DATE }));
+    assert.ok(/aria-label="Link: Blank labels"[^>]*href="https:\/\/a\.example"[^>]*>.*?<span>Link<\/span>/.test(html), 'general action keeps its text');
+    assert.ok(/aria-label="Slides: Blank labels"[^>]*href="https:\/\/b\.example"[^>]*>.*?<span>Slides<\/span>/.test(html), 'slides action keeps its text');
+    assert.equal(/aria-label="\s*:/.test(html), false, 'no action is named only by the talk title');
+    assert.deepEqual(errors, []);
   });
 
   test('strict validation with errors renders the validationError alert instead of talks', () => {

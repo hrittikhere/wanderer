@@ -39,8 +39,16 @@ export interface FakeWebGl {
   programs: number;
   /** gl.clear calls: one per phenomenon render frame. */
   clears: number;
-  /** WEBGL_lose_context.loseContext() calls, made by the support probe. */
+  /** WEBGL_lose_context.loseContext() calls on any canvas. */
   released: number;
+  /** loseContext() calls on the support probe's detached canvas. */
+  probeReleases: number;
+  /** loseContext() calls on the renderer's `.wanderer-globe__canvas`. */
+  rendererReleases: number;
+  /** The last value uploaded to each cobe uniform, by uniform name (cobe maps phi to `z`, the marker count to `C`, markers to `u`, size to `w`). */
+  uniforms: Map<string, unknown>;
+  /** Fill styles set on fake 2D contexts (the intro sketch), in order. */
+  fills: string[];
   setVisible(visible: boolean): void;
   cleanup(): void;
 }
@@ -48,6 +56,10 @@ export interface FakeWebGl {
 export interface FakeWebGlOptions {
   /** Return true to deny a WebGL context for this canvas (phenomenon then throws). */
   deny?: (canvas: HTMLCanvasElement) => boolean;
+  /** Answer getContext('2d') with a recording fake instead of null, so the intro sketch runs. */
+  context2d?: boolean;
+  /** Start with the document hidden (a background tab). */
+  hidden?: boolean;
 }
 
 export function installFakeWebGl(dom: DomHandle, options: FakeWebGlOptions = {}): FakeWebGl {
@@ -58,24 +70,46 @@ export function installFakeWebGl(dom: DomHandle, options: FakeWebGlOptions = {})
     programs: 0,
     clears: 0,
     released: 0,
+    probeReleases: 0,
+    rendererReleases: 0,
+    uniforms: new Map(),
+    fills: [],
     setVisible(visible) {
       visibility = visible ? 'visible' : 'hidden';
       dom.document.dispatchEvent(new window.Event('visibilitychange'));
     },
     cleanup,
   };
-  let visibility = 'visible';
+  let visibility = options.hidden ? 'hidden' : 'visible';
 
-  const makeGl = () => {
+  // Like a browser, one context per canvas; once released it stays lost and reports no attributes.
+  const contexts = new WeakMap<HTMLCanvasElement, unknown>();
+  const lost = new WeakSet<HTMLCanvasElement>();
+  const loseContext = (canvas: HTMLCanvasElement) => () => {
+    lost.add(canvas);
+    state.released += 1;
+    if (canvas.classList.contains('wanderer-globe__canvas')) state.rendererReleases += 1;
+    else if (!canvas.isConnected) state.probeReleases += 1;
+  };
+  const upload = (location: { name?: string } | null, value: unknown) => {
+    if (location?.name) state.uniforms.set(location.name, Array.isArray(value) || ArrayBuffer.isView(value) ? Array.from(value as ArrayLike<number>) : value);
+  };
+  const makeGl = (canvas: HTMLCanvasElement) => {
     const known: Record<string, unknown> = {
-      getContextAttributes: () => ({ alpha: true }),
-      getExtension: (name: string) => (name === 'WEBGL_lose_context' ? { loseContext: () => { state.released += 1; }, restoreContext: () => {} } : null),
+      getContextAttributes: () => (lost.has(canvas) ? null : { alpha: true }),
+      isContextLost: () => lost.has(canvas),
+      getExtension: (name: string) => (name === 'WEBGL_lose_context' ? { loseContext: loseContext(canvas), restoreContext: () => {} } : null),
       createProgram: () => { state.programs += 1; return {}; },
       clear: () => { state.clears += 1; },
       createShader: () => ({}),
       createBuffer: () => ({}),
       createTexture: () => ({}),
-      getUniformLocation: () => ({}),
+      getUniformLocation: (_program: unknown, name: string) => ({ name }),
+      uniform1f: upload,
+      uniform2fv: upload,
+      uniform3fv: upload,
+      uniform4fv: upload,
+      uniformMatrix4fv: (location: { name?: string } | null, _transpose: boolean, value: unknown) => upload(location, value),
       getAttribLocation: () => 0,
       getParameter: () => ({}),
       drawingBufferWidth: 1,
@@ -90,15 +124,23 @@ export function installFakeWebGl(dom: DomHandle, options: FakeWebGlOptions = {})
     });
   };
 
+  const make2d = () => {
+    const context: Record<string, unknown> = {};
+    for (const name of ['clearRect', 'setTransform', 'beginPath', 'arc', 'fill', 'fillRect']) context[name] = () => undefined;
+    Object.defineProperty(context, 'fillStyle', { get: () => state.fills.at(-1) ?? '', set: (value: string) => { state.fills.push(value); } });
+    return context;
+  };
+
   const canvasPrototype = window.HTMLCanvasElement.prototype;
   const previousGetContext = Object.getOwnPropertyDescriptor(canvasPrototype, 'getContext');
   Object.defineProperty(canvasPrototype, 'getContext', {
     configurable: true,
     writable: true,
     value: function getContext(this: HTMLCanvasElement, type: string) {
-      if (type === '2d') return null;
+      if (type === '2d') return options.context2d ? make2d() : null;
       if (options.deny?.(this)) return null;
-      return makeGl();
+      if (!contexts.has(this)) contexts.set(this, makeGl(this));
+      return contexts.get(this);
     },
   });
 

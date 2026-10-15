@@ -13,7 +13,11 @@ export function registerPlugins<T extends Registration>(
   reservedIds: readonly string[] = [],
 ): T[] {
   const seen = new Set(reservedIds);
-  for (const plugin of plugins) {
+  Array.from(plugins).forEach((plugin, index) => {
+    // JavaScript callers can pass anything, for example `[base, flag && extra]`.
+    if (!plugin || typeof plugin !== 'object' || typeof plugin.id !== 'string') {
+      throw new Error(`Plugins and contributions must be objects with a string id; entry ${index} is ${plugin === null ? 'null' : typeof plugin === 'object' ? 'an object without a string id' : String(plugin)}.`);
+    }
     if (!plugin.id || plugin.id.trim() !== plugin.id) {
       throw new Error('Plugin/contribution IDs must be nonempty and have no surrounding whitespace.');
     }
@@ -24,7 +28,7 @@ export function registerPlugins<T extends Registration>(
       throw new Error(`Invalid order for plugin/contribution: ${plugin.id}`);
     }
     seen.add(plugin.id);
-  }
+  });
   return [...plugins].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || compareIds(a.id, b.id));
 }
 
@@ -34,7 +38,8 @@ export function collectContributions<P extends Registration, C extends Registrat
   select: (plugin: P) => readonly C[] | undefined,
   reservedIds: readonly string[] = [],
 ): C[] {
-  return registerPlugins(registerPlugins(plugins).flatMap((plugin) => select(plugin) ?? []), reservedIds);
+  // Materialize holes before flatMap can silently discard invalid entries.
+  return registerPlugins(registerPlugins(plugins).flatMap((plugin) => Array.from(select(plugin) ?? [])), reservedIds);
 }
 
 /** Identity helper: contextual typing for callbacks inside a plugin literal, with the literal's own type preserved. */

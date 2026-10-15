@@ -1,17 +1,17 @@
 import { afterEach, describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { act, createElement } from 'react';
-import type { Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { Talks } from '../src/index.js';
 import { GlobeRegionList, globeView, preloadGlobeView } from '../src/globe.js';
 import type { TalksContext } from '../src/component-types.js';
 import { deriveGeography } from '../src/helpers.js';
 import { click, installDom, type DomHandle } from './support/dom.js';
-import { loadReactDomClient } from './support/react.js';
+import { hydrate, loadReactDomClient } from './support/react.js';
 import { FIXTURE_TALKS, REFERENCE_DATE } from './support/fixtures.js';
+import { spyOnRendererImport } from './support/import-hooks.js';
 
-const { createRoot, hydrateRoot } = await loadReactDomClient();
+const { createRoot } = await loadReactDomClient();
 
 const cleanups: (() => Promise<void>)[] = [];
 // Run in reverse so roots unmount before their DOM globals disappear.
@@ -46,9 +46,7 @@ describe('GlobeView fallback without WebGL', () => {
     });
     container.innerHTML = renderToString(element());
     assert.ok(container.querySelector('[data-wanderer-globe-status="idle"]'), 'server markup renders the idle globe shell');
-    const errors: string[] = [];
-    let root!: Root;
-    await act(async () => { root = hydrateRoot(container, element(), { onRecoverableError: (error) => errors.push(String(error)) }); });
+    const { root, errors } = await hydrate(container, element());
     cleanups.push(async () => { await act(async () => { root.unmount(); }); dom.cleanup(); });
     assert.deepEqual(errors, []);
     const section = container.querySelector('.wanderer')!;
@@ -68,7 +66,7 @@ describe('GlobeView fallback without WebGL', () => {
     assert.equal(dom.document.activeElement?.id, section.querySelector('.wanderer-view__heading')?.id);
   });
 
-  test('the immersive presentation adds a back-to-list control that also works', async () => {
+  test('the immersive presentation adds an Exit fullscreen control that also works', async () => {
     const dom = webglLessDom(1440);
     const container = dom.document.getElementById('root')!;
     const root = createRoot(container);
@@ -85,13 +83,16 @@ describe('GlobeView fallback without WebGL', () => {
     assert.equal(section.getAttribute('data-wanderer-view'), 'list');
   });
 
-  test('preloadGlobeView in a browser-like environment returns the shared promise', async () => {
+  test('preloadGlobeView in a browser-like environment shares one renderer import', async () => {
     const dom = webglLessDom(1440);
-    cleanups.push(async () => { dom.cleanup(); });
+    const spy = spyOnRendererImport();
+    cleanups.push(async () => { spy.restore(); dom.cleanup(); });
     const first = preloadGlobeView();
     assert.ok(first instanceof Promise);
     // The renderer module imports cobe, which needs a real WebGL canvas only when mounted; loading is fine here.
-    await first;
+    await Promise.all([first, preloadGlobeView()]);
+    await preloadGlobeView();
+    assert.ok(spy.imports <= 1, `every call shares the memoized import (saw ${spy.imports})`);
   });
 });
 

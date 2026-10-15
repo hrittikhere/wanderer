@@ -30,39 +30,83 @@
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "helpers": [
+        "./dist/types/helpers.d.ts"
+      ],
+      "list": [
+        "./dist/types/list.d.ts"
+      ],
+      "globe": [
+        "./dist/types/globe.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
-      "types": "./dist/types/index.d.ts",
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
+      "import": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
     },
     "./helpers": {
-      "types": "./dist/types/helpers.d.ts",
-      "import": "./dist/esm/helpers.js",
-      "require": "./dist/cjs/helpers.js"
+      "import": {
+        "types": "./dist/types/helpers.d.ts",
+        "default": "./dist/esm/helpers.js"
+      },
+      "require": {
+        "types": "./dist/cjs/helpers.d.ts",
+        "default": "./dist/cjs/helpers.js"
+      }
     },
     "./list": {
-      "types": "./dist/types/list.d.ts",
-      "import": "./dist/esm/list.js",
-      "require": "./dist/cjs/list.js"
+      "import": {
+        "types": "./dist/types/list.d.ts",
+        "default": "./dist/esm/list.js"
+      },
+      "require": {
+        "types": "./dist/cjs/list.d.ts",
+        "default": "./dist/cjs/list.js"
+      }
     },
     "./globe": {
-      "types": "./dist/types/globe.d.ts",
-      "import": "./dist/esm/globe.js",
-      "require": "./dist/cjs/globe.js"
+      "import": {
+        "types": "./dist/types/globe.d.ts",
+        "default": "./dist/esm/globe.js"
+      },
+      "require": {
+        "types": "./dist/cjs/globe.d.ts",
+        "default": "./dist/cjs/globe.js"
+      }
     },
     "./styles.css": "./dist/styles.css",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "src",
     "docs",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
-    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+    "node": ">=20"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^22.22.2 || ^24.15.0 || >=26.0.0",
+      "onFail": "warn"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -70,6 +114,7 @@
     "test": "npm run build && npm run typecheck && npm run test:unit && node scripts/verify-dist.mjs",
     "test:unit": "node scripts/test.mjs",
     "verify:dist": "node scripts/verify-dist.mjs",
+    "test:runtime": "node scripts/runtime-smoke.mjs",
     "test:compat": "node scripts/react-compat.mjs",
     "prepack": "npm run build",
     "test:package": "node scripts/package-smoke.mjs",

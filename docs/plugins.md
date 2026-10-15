@@ -32,7 +32,7 @@ interface TalksPlugin {
 }
 ```
 
-Ids must be nonempty with no surrounding whitespace. `order` must be a finite number when present.
+Ids must be nonempty strings with no surrounding whitespace, and view ids must contain no whitespace at all, since they become element ids and `aria-labelledby` references. `order` must be a finite number when present. Every entry of `plugins` (and of each contribution list) must be an object: `[base, flag && extra]` throws a message naming the entry, so filter such arrays first. Empty slots in sparse arrays are rejected just like explicit `undefined` entries.
 
 ## Ordering
 
@@ -65,7 +65,7 @@ interface ViewContribution {
   order?: number;
   label: string;            // toggle button text; '' falls back to copy for `list` and `globe`
   presentation?: 'inline' | 'immersive'; // fullscreen includes the toolbar and heading
-  heading?: string;         // rendered by Talks above the view; defaults to the label
+  heading?: string;         // rendered by Talks above the view; defaults to the label (copy.listHeading / copy.globeHeading for `list` and `globe`)
   icon?: ReactNode;         // drawn before the label in the toggle
   Component: ComponentType<TalkViewProps>;
   preload?: () => Promise<unknown>;  // called on pointer enter and focus of the toggle
@@ -76,10 +76,11 @@ interface TalkViewProps {
   active: boolean;   // false while both responsive shells render before hydration
   headingId: string; // id of the heading Talks renders above the view
   viewId: string;
+  presentation?: 'inline' | 'immersive'; // the presentation in effect: immersive only inside the fullscreen dialog
 }
 ```
 
-The view component renders the body only. `Talks` renders the toolbar and the heading, wraps the body in an error boundary (fallback: `copy.pluginError`) and resets that boundary when the view changes.
+The view component renders the body only. `Talks` renders the toolbar and the heading, wraps the body in an error boundary (fallback: `copy.pluginError`) and resets that boundary when the view changes. On the server React does not run error boundaries, so the body also sits in a `<Suspense>` boundary: a view that throws during server rendering leaves an empty placeholder and is rendered again on the client, where the error boundary applies. The body is memoized on `context`, so the render that only updates the search field after a keystroke skips it. Right after hydration the body receives the resolved context (viewport, color scheme, `active`) in a deferred render rather than the urgent one, which lets React 18 hydrate the boundary first; see [SSR](ssr.md#hydration-model).
 
 ### FilterContribution
 
@@ -115,7 +116,7 @@ interface ActionContribution {
 }
 ```
 
-Per talk, `when` is evaluated first. If `getLink` returns a link, the action renders as an anchor through the navigation options (target and rel follow the link's `kind`). Otherwise it renders as a `<button>` that calls `onAction(talk, context)`. Actions from links on the talk itself render first, then plugin actions in order. The accessible name is `copy.actionLabel(label, talk.title)`. Without `icon`, the default icon is chosen by `kind` (`recording`, `slides`, `detail`, `event` or `general`); a button with no kind has no icon.
+Per talk, `when` is evaluated first. If `getLink` returns a link, the action renders as an anchor through the navigation options (target and rel follow the link's `kind`). Otherwise, when `onAction` is set, it renders as a `<button>` that calls `onAction(talk, context)`. With neither a link nor `onAction`, the action is not rendered for that talk, so `getLink` can return `undefined` to skip a talk. Actions from links on the talk itself render first, then plugin actions in order. The accessible name is `copy.actionLabel(label, talk.title)`. Without `icon`, the default icon is chosen by `kind` (`recording`, `slides`, `detail`, `event` or `general`); a button with no kind has no icon.
 
 The URL returned by `getLink` passes through the same `safeUrl` gate as built-in links. Unsafe links render their label as noninteractive text and never reach a custom router component.
 
@@ -137,7 +138,7 @@ interface TalkRendererProps {
 }
 ```
 
-For each talk, the first renderer in order whose `when` passes (or that has no `when`) replaces the built-in `TalkCard`. Each custom renderer is wrapped in an error boundary with `copy.pluginError`. `context.renderTalk(talk, group)` applies the same resolution, so custom views get custom renderers for free.
+For each talk, the first renderer in order whose `when` passes (or that has no `when`) replaces the built-in `TalkCard`. Each custom renderer is wrapped in an error boundary with `copy.pluginError`, and in a `<Suspense>` boundary so a renderer that throws on the server falls back to client rendering for that card instead of failing the page. `context.renderTalk(talk, group)` applies the same resolution, so custom views get custom renderers for free.
 
 ### Slots
 
@@ -150,7 +151,7 @@ interface TalksSlots {
 }
 
 interface SearchSlotProps {
-  id: string;                 // use it on the input so the shell's label association works
+  id: string;                 // unique per instance and shell; put it on the input and on your own <label htmlFor> (the shell renders no label for a slot)
   value: string;
   onChange: (value: string) => void;
   label: string;              // copy.searchLabel
@@ -163,7 +164,7 @@ interface GlobeOverlayCardProps { milestone: Milestone; context: TalksContext; }
 interface GlobeAsideProps { context: TalksContext; geography: Geography; }
 ```
 
-`SearchInput` replaces the whole built-in search field, including its clear button. `GlobeOverlayCard` replaces the milestone callout that appears when the renderer activates a milestone. `GlobeAside` renders inside the globe panel below the region and location lists. `GlobeStageOverlay` renders in a `<div class="wanderer-globe__overlay">` inside `.wanderer-globe__stage-wrap`, layered over the stage and its hint. The overlay is absolutely positioned over the whole stage area with `pointer-events: none`; its direct children get `pointer-events: auto`, so position your own content and it stays clickable. It receives the same props as `GlobeAside`.
+`SearchInput` replaces the whole built-in search field, including its clear button. Any text input it renders (`type="search"`, `"text"` and so on) behaves like the built-in one on Escape: the first press clears the search, the next one returns to the list. A text field inside a plugin view keeps Escape while it has text and is never cleared by the component; handle Escape in its own `onKeyDown` if it should clear. `GlobeOverlayCard` replaces the card inside the milestone callout that appears when the renderer activates a milestone; the callout wrapper and its Dismiss button stay, so do not add a close control of your own. `GlobeAside` renders inside the globe panel below the region and location lists. `GlobeStageOverlay` renders in a `<div class="wanderer-globe__overlay">` inside `.wanderer-globe__stage-wrap`, layered over the stage and its hint. The overlay is absolutely positioned over the whole stage area with `pointer-events: none`; its direct children get `pointer-events: auto`, so position your own content and it stays clickable. It receives the same props as `GlobeAside`.
 
 ## The context
 
@@ -176,19 +177,20 @@ Useful members:
 | `allTalks`, `talks`, `groups`, `geography` | Validated talks, the filtered subset, the grouped subset, markers and regions. |
 | `referenceDate`, `isUpcoming(talk)`, `formatDate(date, options?)` | Date helpers bound to the instance's locale and format. |
 | `view`, `views`, `setView(id, reason?)`, `viewHeadingId(id)` | View state. `setView` defaults the reason to `user`, which also moves focus to the heading. |
-| `search`, `setSearch`, `filters`, `setFilters`, `toggleFilter`, `availableFilters`, `hasActiveFilters`, `resetAll` | Search and filter state. |
+| `search`, `setSearch`, `filters`, `setFilters`, `toggleFilter`, `availableFilters`, `hasActiveFilters`, `resetAll` | Search and filter state. `search`, `filters` and `hasActiveFilters` describe the applied results and can trail the field by one render while a long list updates; the setters always apply to the latest value and accept a function of it. |
 | `getLinks(talk)`, `getPrimaryLink(talk)`, `getActions(talk)`, `renderLink(link, children, talk?, props?)` | The link model, honoring the navigation options. |
 | `renderTalk(talk, group?)` | Renders a talk through the renderer resolution. |
-| `copy`, `locale`, `dateFormat`, `direction`, `theme`, `colorScheme`, `breakpoint`, `density`, `headingLevel`, `grouping` | Presentation settings. `colorScheme` is `light` on the server and during hydration when `theme` is `system`; after hydration it honors an ancestor `data-wanderer-scheme` hint, then `prefers-color-scheme`. `breakpoint` is the responsive breakpoint in CSS pixels (`DEFAULT_BREAKPOINT`, 1024, without `responsive`); match it in a custom view with `useMediaQuery(`(min-width: ${context.breakpoint}px)`)`, as the globe does for its connector lines. |
+| `copy`, `locale`, `dateFormat`, `direction`, `theme`, `colorScheme`, `breakpoint`, `density`, `headingLevel`, `grouping` | Presentation settings. `colorScheme` is `light` on the server and during hydration when `theme` is `system`; after hydration it honors an ancestor `data-wanderer-scheme` hint, then `prefers-color-scheme`. `breakpoint` is the responsive breakpoint in CSS pixels (`DEFAULT_BREAKPOINT`, 1024, without `responsive`); match the shells in a custom view with ``useMediaQuery(`(min-width: ${context.breakpoint}px)`)``. The globe's milestone callout and connector lines do not follow it: they depend on the measured space beside the stage (`data-wanderer-callout`). |
 | `instanceId`, `milestones`, `ImageComponent`, `slots`, `navigation`, `geographyOptions`, `validation` | Instance data. |
 
 ## State and cleanup
 
 - Plugin components own their state with ordinary hooks. The library stores nothing for them.
 - Read everything else from `useTalks()` or the `context` prop; do not reach into DOM of other parts of the component.
-- Contributions are registered per instance when the `plugins` prop changes. Keep the plugin array stable (module scope or `useMemo`) so the registry is not rebuilt every render.
+- Contributions are registered per instance when the `plugins` prop changes. An inline array is fine when its items are stable (define plugins at module scope or with `useMemo`): a new array with the same plugin objects keeps the registry. A plugin object created during render rebuilds it every time. The same holds for `views`, `enabledViews`, `builtinFilters` and `slots`.
+- A filter predicate that throws excludes the talks it threw on and is logged once per filtering pass; a `SearchInput` slot that throws is replaced by `copy.pluginError` while the chips, count and views keep working.
 - Subscriptions (timers, observers, event listeners) belong in effects with cleanup. Views unmount when the user switches, and the error boundary resets on view change.
-- Server rendering: every contribution renders on the server. Do not touch `window`, `document`, `matchMedia` or `IntersectionObserver` during render. Use effects, or `useIsClient()` from `@wanderer/talks`, and keep the first client render identical to the server output. Lazy chunks belong in `preload` and in an effect, as `globeView()` does.
+- Server rendering: every contribution renders on the server (a view or renderer that throws there falls back to client rendering). Do not touch `window`, `document`, `matchMedia` or `IntersectionObserver` during render. Use effects, or `useIsClient()` from `@wanderer/talks`, and keep the first client render identical to the server output. Lazy chunks belong in `preload` and in an effect, as `globeView()` does.
 
 ## Accessibility expectations
 

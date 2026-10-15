@@ -1,22 +1,23 @@
 'use client';
 
 import {
-  useCallback, useEffect, useId, useMemo, useRef, useState,
-  type AnchorHTMLAttributes, type CSSProperties, type KeyboardEvent, type ReactNode, type WheelEvent,
+  Suspense, memo, useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState,
+  type AnchorHTMLAttributes, type ComponentType, type CSSProperties, type KeyboardEvent, type ReactNode, type WheelEvent,
 } from 'react';
 import type {
   ActionContribution, BuiltinFilterId, FilterContribution, ImageComponentProps, Milestone, NavigationOptions,
-  RendererContribution, ResolvedView, TalkAction, TalksContext, TalksCopy, TalksPlugin, TalksProps,
+  RendererContribution, ResolvedView, TalkAction, TalkViewProps, TalksContext, TalksCopy, TalksPlugin, TalksProps,
   TalksSlots, ViewChangeReason, ViewContribution,
 } from '../component-types.js';
 import type { Talk, TalkGroup, TalkLink } from '../types.js';
 import { TalksReactContext } from '../context.js';
+import { restrictGeography } from '../geography.js';
 import { mergeCopy } from '../copy.js';
 import {
-  DEFAULT_PRIMARY_LINK_PRECEDENCE, deriveGeography, filterTalks, formatCalendarDate, getPrimaryLink,
-  getTalkLinks, groupTalks, isUpcoming, validateTalks,
+  DEFAULT_BREAKPOINT, DEFAULT_PRIMARY_LINK_PRECEDENCE, deriveGeography, filterTalks, formatCalendarDate, getPrimaryLink,
+  getTalkLinks, groupTalks, isUpcoming, normalizeSearch, validateTalks,
 } from '../helpers.js';
-import { useColorScheme, useControllable, useMediaQuery } from '../hooks.js';
+import { useColorScheme, useControllable, useIsClient, useMediaQuery, useShallowStable } from '../hooks.js';
 import { collectContributions, registerPlugins } from '../plugins.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
 import { Heading } from './Heading.js';
@@ -26,15 +27,73 @@ import { TalkLinkAnchor } from './TalkLink.js';
 import { Toolbar } from './Toolbar.js';
 import { ViewShell } from './ViewShell.js';
 
-export const DEFAULT_BREAKPOINT = 1024;
 const RESERVED_VIEW_IDS = ['list', 'globe'] as const;
+
+/**
+ * A positive, finite breakpoint, or DEFAULT_BREAKPOINT for anything else (a
+ * string from untyped config, NaN, 0). The value goes into an inline <style>.
+ */
+function resolveBreakpoint(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : DEFAULT_BREAKPOINT;
+}
 const BUILTIN_FILTER_IDS: readonly BuiltinFilterId[] = ['recording', 'upcoming', 'online', 'in-person', 'hybrid'];
 const RESERVED_ACTION_IDS = ['event', 'recording', 'slides', 'detail', 'general'] as const;
 const DEFAULT_DATE_FORMAT: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
 const TRACKPAD_TOGGLE_DISTANCE = 110;
 const TRACKPAD_MIN_DELTA = 4;
 const TRACKPAD_COOLDOWN_MS = 700;
+/** Wheel events further apart than this belong to separate gestures. */
+const TRACKPAD_GESTURE_GAP_MS = 300;
 const ANNOUNCE_DELAY_MS = 600;
+/** Input types that hold text the visitor edits; Escape in one with text belongs to the field. */
+const TEXT_ENTRY_TYPES = new Set(['text', 'search', 'email', 'url', 'tel', 'password', 'number']);
+
+/** The text of an editable field, or null when the target is not one (checkboxes, ranges and buttons have values too). */
+function editableText(target: EventTarget | null): string | null {
+  const element = target as HTMLElement | null;
+  if (!element || typeof element.tagName !== 'string') return null;
+  if (element.tagName === 'TEXTAREA') return (element as HTMLTextAreaElement).value;
+  if (element.tagName === 'INPUT') return TEXT_ENTRY_TYPES.has((element as HTMLInputElement).type) ? (element as HTMLInputElement).value : null;
+  return element.isContentEditable ? element.textContent ?? '' : null;
+}
+
+/** True when a horizontally scrollable element sits between the wheel target and the root: the wheel input is its scrolling. */
+function insideHorizontalScroller(target: EventTarget | null, root: Element): boolean {
+  for (let node = target as HTMLElement | null; node && node !== root; node = node.parentElement) {
+    if (typeof node.scrollWidth !== 'number' || node.scrollWidth <= node.clientWidth) continue;
+    const overflow = typeof getComputedStyle === 'function' ? getComputedStyle(node).overflowX : '';
+    if (overflow === 'auto' || overflow === 'scroll') return true;
+  }
+  return false;
+}
+
+/** A polite live region that waits until the text has been stable for a moment; only this paragraph re-renders when it speaks. */
+function Announcement({ text }: { text: string }) {
+  const [spoken, setSpoken] = useState('');
+  useEffect(() => {
+    if (!text) { setSpoken(''); return; }
+    const timer = setTimeout(() => setSpoken(text), ANNOUNCE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
+  return <p className="wanderer-visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-wanderer-announcement="results">{spoken}</p>;
+}
+
+/**
+ * The view body. Memoized so the urgent render of a keystroke, which only
+ * updates the field, skips the view; it re-renders once the deferred results
+ * produce a new context. The Suspense boundary makes a view that throws during
+ * server rendering fall back to client rendering. It sits inside the memo so
+ * a render with unchanged props does not hand the boundary a new element,
+ * which React 18 treats as an update to a boundary that may still be
+ * dehydrated.
+ */
+const ViewBody = memo(function ViewBody({ Component, ...props }: TalkViewProps & { Component: ComponentType<TalkViewProps> }) {
+  return (
+    <Suspense fallback={null}>
+      <Component {...props} />
+    </Suspense>
+  );
+});
 
 function DefaultImage({ src, alt, width, height, loading, decoding, sizes, className }: ImageComponentProps) {
   return (
@@ -90,13 +149,20 @@ function buildRegistry(
   copy: TalksCopy,
 ): Registry {
   const ordered = registerPlugins(plugins);
+  // `views` may replace the built-in list by reusing its id; any other repeated id throws like a plugin's would.
+  registerPlugins(extraViews);
   const propViews = new Map<string, ViewContribution>();
   propViews.set('list', listView());
   for (const view of extraViews) propViews.set(view.id, view);
   const propViewIds = [...propViews.keys()];
   const pluginViews = collectContributions(ordered, (plugin) => plugin.views, [...RESERVED_VIEW_IDS, ...propViewIds]);
   const allViews = registerPlugins([...propViews.values(), ...pluginViews]);
+  for (const view of allViews) {
+    // View ids become element ids and aria-labelledby IDREFs, which whitespace would split.
+    if (/\s/u.test(view.id)) throw new Error(`View IDs must not contain whitespace: ${view.id}`);
+  }
   const enabled = enabledViews ? allViews.filter((view) => enabledViews.includes(view.id)) : allViews;
+  if (enabled.length === 0) throw new Error(`enabledViews matches no registered view: [${(enabledViews ?? []).join(', ')}]. Registered: ${allViews.map((view) => view.id).join(', ')}.`);
   const views: ResolvedView[] = enabled.map((view) => ({
     id: view.id,
     ...resolveViewLabel(view, copy),
@@ -175,21 +241,34 @@ export function Talks(props: TalksProps) {
   } = props;
 
   const instanceId = useId();
-  const copy = useMemo(() => mergeCopy(copyOverrides), [copyOverrides]);
-  const validationResult = useMemo(() => validateTalks(input, { mode: validation }), [input, validation]);
-  useEffect(() => { onValidation?.(validationResult); }, [validationResult, onValidation]);
+  // Inline literals (`plugins={[a]}`, `copy={{ ... }}`, `talks={[...a, ...b]}`) that
+  // equal the previous render's value item by item keep their memoized work.
+  const stableCopy = useShallowStable(copyOverrides);
+  const stableInput = useShallowStable(input);
+  const stablePlugins = useShallowStable(plugins);
+  const stableViews = useShallowStable(extraViews);
+  const stableEnabledViews = useShallowStable(enabledViews);
+  const stableBuiltinFilters = useShallowStable(builtinFilters);
+  const stableSlots = useShallowStable(slots);
+  const copy = useMemo(() => mergeCopy(stableCopy), [stableCopy]);
+  const validationResult = useMemo(() => validateTalks(stableInput, { mode: validation }), [stableInput, validation]);
+  // Reported when the result changes (new data or mode), never for a new callback identity.
+  const onValidationRef = useRef(onValidation);
+  onValidationRef.current = onValidation;
+  useEffect(() => { onValidationRef.current?.(validationResult); }, [validationResult]);
   const allTalks = validationResult.talks;
+  const showsValidationError = validation === 'strict' && !validationResult.valid;
 
   const registry = useMemo(
-    () => buildRegistry(plugins, extraViews, enabledViews, builtinFilters, slots, copy),
-    [plugins, extraViews, enabledViews, builtinFilters, slots, copy],
+    () => buildRegistry(stablePlugins, stableViews, stableEnabledViews, stableBuiltinFilters, stableSlots, copy),
+    [stablePlugins, stableViews, stableEnabledViews, stableBuiltinFilters, stableSlots, copy],
   );
   const viewIds = useMemo(() => registry.views.map((view) => view.id), [registry]);
   const viewIdsRef = useRef(viewIds);
   viewIdsRef.current = viewIds;
 
   // View state: controlled > explicit user choice > responsive default > fixed default.
-  const breakpoint = responsive?.breakpoint ?? DEFAULT_BREAKPOINT;
+  const breakpoint = resolveBreakpoint(responsive?.breakpoint);
   const isLarge = useMediaQuery(responsive ? `(min-width: ${breakpoint}px)` : null);
   const [userView, setUserView] = useState<string | undefined>(undefined);
   // The view each breakpoint would show once a missing id falls back to the first view.
@@ -209,6 +288,15 @@ export function Talks(props: TalksProps) {
   } else candidate = defaultView ?? viewIds[0];
   const candidateAvailable = candidate !== undefined && viewIds.includes(candidate);
   const activeView = pending ? undefined : candidateAvailable ? candidate : viewIds[0];
+  const activeViewRef = useRef(activeView);
+  activeViewRef.current = activeView;
+  // Fullscreen opens for a view the visitor or the consumer chose (a click,
+  // the `view` prop, a fixed `defaultView`), never for the responsive pick on
+  // load or on a breakpoint crossing, and only after hydration: the server
+  // HTML and the first client render show every view inline.
+  const isClient = useIsClient();
+  const fullscreenAllowed = isClient && candidateAvailable
+    && (controlledView !== undefined || userView !== undefined || !responsive);
 
   const reasonRef = useRef<ViewChangeReason | null>(null);
   const previousViewRef = useRef<string | undefined>(undefined);
@@ -220,7 +308,8 @@ export function Talks(props: TalksProps) {
   onViewChangeRef.current = onViewChange;
 
   useEffect(() => {
-    if (activeView === undefined) return;
+    // The strict validation alert shows no view, so none is reported until the data is valid.
+    if (activeView === undefined || showsValidationError) return;
     const largeChanged = lastLargeRef.current !== isLarge;
     lastLargeRef.current = isLarge;
     const previous = previousViewRef.current;
@@ -249,7 +338,7 @@ export function Talks(props: TalksProps) {
     // unavailable fallback are worth announcing.
     if (controlledView !== undefined && previous !== undefined && reason !== 'unavailable') return;
     onViewChangeRef.current?.(activeView, { reason, previousView: previous });
-  }, [activeView, candidate, candidateAvailable, controlledView, userView, isLarge]);
+  }, [activeView, candidate, candidateAvailable, controlledView, userView, isLarge, showsValidationError]);
 
   const viewHeadingId = useCallback((view: string) => `${instanceId}-view-${view}-heading`, [instanceId]);
 
@@ -275,6 +364,13 @@ export function Talks(props: TalksProps) {
 
   const setView = useCallback((next: string, reason: ViewChangeReason = 'user') => {
     if (!viewIdsRef.current.includes(next)) return;
+    if (next === activeViewRef.current) {
+      // Already shown: no change to report and no focus to move. Choosing it
+      // again still makes it the visitor's choice, so an immersive view the
+      // responsive default showed inline opens fullscreen.
+      if (reason === 'user' && controlledView === undefined) setUserView(next);
+      return;
+    }
     reasonRef.current = reason;
     if (reason === 'user') focusRequestRef.current = { view: next, source: document.activeElement };
     if (controlledView === undefined) {
@@ -287,49 +383,68 @@ export function Talks(props: TalksProps) {
   // Search and filter state (each independently controllable).
   const [search, setSearch] = useControllable(controlledSearch, defaultSearch, onSearchChange);
   const [filters, setFilters] = useControllable<readonly string[]>(controlledFilters, defaultFilters ?? EMPTY_FILTERS, onFiltersChange);
+  // Functional updates read the latest filters, so two toggles in one handler compose.
   const toggleFilter = useCallback((id: string) => {
-    setFilters(filters.includes(id) ? filters.filter((item) => item !== id) : [...filters, id]);
-  }, [filters, setFilters]);
+    setFilters((previous) => (previous.includes(id) ? previous.filter((item) => item !== id) : [...previous, id]));
+  }, [setFilters]);
   const resetAll = useCallback(() => { setSearch(''); setFilters(EMPTY_FILTERS); }, [setSearch, setFilters]);
 
-  const activeFilters = useMemo(
-    () => registry.filters.filter((filter) => filters.includes(filter.id)),
-    [registry.filters, filters],
-  );
-  const hasActiveFilters = search.trim().length > 0 || activeFilters.length > 0;
+  // A query is active when it leaves at least one search term, the same rule
+  // filterTalks applies (a lone combining accent normalizes to nothing).
+  const isActive = (text: string, ids: readonly string[]) => normalizeSearch(text).length > 0 || registry.filters.some((filter) => ids.includes(filter.id));
+  const liveHasActiveFilters = isActive(search, filters);
 
+  // The input and chips update at once; filtering, grouping and re-rendering a
+  // long list follow in an interruptible render, so typing stays responsive.
+  // The context describes the applied (deferred) search and filters.
+  const deferredSearch = useDeferredValue(search);
+  const deferredFilters = useDeferredValue(filters);
+  const hasActiveFilters = isActive(deferredSearch, deferredFilters);
+  const activeFilters = useMemo(
+    () => registry.filters.filter((filter) => deferredFilters.includes(filter.id)),
+    [registry.filters, deferredFilters],
+  );
   const talks = useMemo(() => {
-    const predicateContext = { referenceDate, allTalks, search, filters };
+    const predicateContext = { referenceDate, allTalks, search: deferredSearch, filters: deferredFilters };
+    // A plugin predicate that throws excludes the talks it threw on and is reported once per computation.
+    const reported = new Set<string>();
     return filterTalks(allTalks, {
-      search,
-      predicates: activeFilters.map((filter) => (talk: Talk) => filter.predicate(talk, predicateContext)),
+      search: deferredSearch,
+      predicates: activeFilters.map((filter) => (talk: Talk) => {
+        try {
+          return filter.predicate(talk, predicateContext);
+        } catch (error) {
+          if (!reported.has(filter.id)) {
+            reported.add(filter.id);
+            console.error(`Filter "${filter.id}" threw; the talks it threw on are excluded.`, error);
+          }
+          return false;
+        }
+      }),
     });
-  }, [allTalks, search, filters, activeFilters, referenceDate]);
+  }, [allTalks, deferredSearch, deferredFilters, activeFilters, referenceDate]);
 
   const groups = useMemo(
-    () => groupTalks(talks, { referenceDate, upcoming: grouping, undatedLabel: copy.undated, upcomingLabel: copy.upcoming }),
-    [talks, referenceDate, grouping, copy],
+    () => groupTalks(talks, { referenceDate, upcoming: grouping, undatedLabel: copy.undated, upcomingLabel: copy.upcoming, locale }),
+    [talks, referenceDate, grouping, copy, locale],
   );
 
   const resolvedGeographyOptions = useMemo(() => ({
     ...geographyOptions,
     unassignedRegion: geographyOptions?.unassignedRegion === undefined ? copy.unassignedRegion : geographyOptions.unassignedRegion,
   }), [geographyOptions, copy]);
-  const geography = useMemo(() => deriveGeography(talks, resolvedGeographyOptions), [talks, resolvedGeographyOptions]);
+  // Markers merge once from every talk so search and filters never re-host a location.
+  const allGeography = useMemo(() => deriveGeography(allTalks, resolvedGeographyOptions), [allTalks, resolvedGeographyOptions]);
+  const geography = useMemo(() => restrictGeography(allGeography, talks, resolvedGeographyOptions), [allGeography, talks, resolvedGeographyOptions]);
 
   const rootRef = useRef<HTMLElement>(null);
   const colorScheme = useColorScheme(theme, rootRef);
   const shellKeyRef = useRef<string | null>(null);
   const pendingShellKeysRef = useRef<string[]>([]);
 
-  // Polite result announcement, debounced so typing does not flood screen readers.
-  const [announcement, setAnnouncement] = useState('');
-  useEffect(() => {
-    if (!hasActiveFilters) { setAnnouncement(''); return; }
-    const text = copy.resultCount(talks.length, allTalks.length);
-    const timer = setTimeout(() => setAnnouncement(text), ANNOUNCE_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [hasActiveFilters, talks.length, allTalks.length, copy]);
+  // Polite result announcement, debounced so typing does not flood screen
+  // readers. Keyed on the text itself, so a parent re-render never restarts it.
+  const announcement = hasActiveFilters ? copy.resultCount(talks.length, allTalks.length) : '';
 
   const formatDate = useCallback(
     (date: string, options?: Intl.DateTimeFormatOptions) => formatCalendarDate(date, locale, options ?? dateFormat, copy.undated),
@@ -363,7 +478,7 @@ export function Talks(props: TalksProps) {
       .map((link, index) => ({
         id: uniqueId(link.id ?? `${link.kind}-${index}`),
         kind: link.kind,
-        label: link.label ?? copy[`${link.kind}Action`],
+        label: typeof link.label === 'string' && link.label.trim() ? link.label : copy[`${link.kind}Action`],
         link,
       }));
     const pluginActions: TalkAction[] = registry.actions
@@ -380,7 +495,9 @@ export function Talks(props: TalksProps) {
             ? () => { if (contextRef.current) action.onAction?.(talk, contextRef.current); }
             : undefined,
         };
-      });
+      })
+      // No link and no handler: nothing to render, rather than an inert button.
+      .filter((action) => action.link || action.onAction);
     return [...linkActions, ...pluginActions];
   }, [getPrimary, copy, registry.actions]);
 
@@ -391,9 +508,13 @@ export function Talks(props: TalksProps) {
     const renderer = registry.renderers.find((item) => !item.when || item.when(talk));
     if (!renderer) return <TalkCard talk={talk} context={context} upcoming={upcoming} group={group} />;
     const Custom = renderer.Component;
+    // The boundary contains client errors; Suspense makes a server-side throw
+    // fall back to client rendering of this card instead of failing the page.
     return (
       <ErrorBoundary fallback={<p className="wanderer-error" role="alert">{copy.pluginError}</p>}>
-        <Custom talk={talk} context={context} upcoming={upcoming} group={group} />
+        <Suspense fallback={null}>
+          <Custom talk={talk} context={context} upcoming={upcoming} group={group} />
+        </Suspense>
       </ErrorBoundary>
     );
   }, [registry.renderers, upcomingFor, copy]);
@@ -420,9 +541,9 @@ export function Talks(props: TalksProps) {
     views: registry.views,
     setView,
     viewHeadingId,
-    search,
+    search: deferredSearch,
     setSearch,
-    filters,
+    filters: deferredFilters,
     setFilters,
     toggleFilter,
     availableFilters: registry.filters,
@@ -443,20 +564,33 @@ export function Talks(props: TalksProps) {
   }), [
     instanceId, allTalks, talks, groups, geography, resolvedGeographyOptions, validationResult, referenceDate, copy,
     locale, dateFormat, direction, theme, colorScheme, breakpoint, density, headingLevel, activeView, registry, setView,
-    viewHeadingId, search, setSearch, filters, setFilters, toggleFilter, hasActiveFilters, resetAll, upcomingFor,
+    viewHeadingId, deferredSearch, setSearch, deferredFilters, setFilters, toggleFilter, hasActiveFilters, resetAll, upcomingFor,
     formatDate, getPrimary, getActions, renderTalk, renderLink, navigation, milestones, ImageComponent, grouping,
   ]);
   contextRef.current = context;
+
+  // A Suspense boundary around each view contains server-side throws. React 18
+  // hydrates such a boundary ahead of an update only when the update is not
+  // urgent, and the first client render after hydration is urgent
+  // (useSyncExternalStore resolves the viewport and color scheme
+  // synchronously). So until a deferred render after hydration, the boundaries
+  // and the context provider keep what they hydrated with; otherwise React 18
+  // would discard their server HTML and report a recoverable error.
+  const settled = useDeferredValue(isClient);
+  const live = { context, pending, fullscreenAllowed };
+  const hydrated = useDeferredValue(settled ? null : live);
+  const boundary = settled || !hydrated ? live : hydrated;
 
   // Keyboard: Escape returns to the list when focus is inside the component.
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!escapeToList || event.key !== 'Escape' || event.defaultPrevented) return;
     if (isModalOpen?.()) return;
-    const target = event.target as HTMLElement | null;
-    if (target instanceof HTMLInputElement && target.value) {
-      // Prevent the dialog's native cancel action while search is being cleared.
+    if (editableText(event.target)) {
+      // A text field with text keeps Escape, and a fullscreen dialog stays
+      // open. Only the component's own search field (built in or the
+      // SearchInput slot) is cleared; a plugin's field handles Escape itself.
       event.preventDefault();
-      if (target.type === 'search') setSearch('');
+      if ((event.target as Element).closest('.wanderer-toolbar__search')) setSearch('');
       return;
     }
     if (activeView === 'list' || !viewIds.includes('list')) return;
@@ -466,13 +600,19 @@ export function Talks(props: TalksProps) {
 
   // Trackpad: horizontal swipes cycle views. Opt-in; never prevents default scrolling.
   const swipeAccumulator = useRef(0);
-  const lastSwipeAt = useRef(0);
+  const lastSwipeAt = useRef(-Infinity);
+  const lastWheelAt = useRef(-Infinity);
   const handleWheel = (event: WheelEvent<HTMLElement>) => {
     if (!trackpadGestures || pending || viewIds.length < 2) return;
     if (isModalOpen?.()) return;
+    const now = event.timeStamp;
+    // A pause ends the gesture: nudges minutes apart never add up to a swipe.
+    if (now - lastWheelAt.current > TRACKPAD_GESTURE_GAP_MS) swipeAccumulator.current = 0;
+    lastWheelAt.current = now;
     const absX = Math.abs(event.deltaX);
     if (absX < TRACKPAD_MIN_DELTA || absX <= Math.abs(event.deltaY)) return;
-    const now = event.timeStamp;
+    // Horizontal scrolling of a table or carousel inside a view is not a swipe between views.
+    if (insideHorizontalScroller(event.target, event.currentTarget)) return;
     if (now - lastSwipeAt.current < TRACKPAD_COOLDOWN_MS) return;
     swipeAccumulator.current += event.deltaX;
     if (Math.abs(swipeAccumulator.current) < TRACKPAD_TOGGLE_DISTANCE) return;
@@ -489,9 +629,10 @@ export function Talks(props: TalksProps) {
     return { ...(tokens as CSSProperties), ...style };
   }, [tokens, style]);
 
-  if (validation === 'strict' && !validationResult.valid) {
+  if (showsValidationError) {
     return (
       <section
+        ref={rootRef}
         className={`wanderer wanderer--error${className ? ` ${className}` : ''}`}
         data-wanderer-theme={theme}
         data-wanderer-instance={instanceId}
@@ -534,7 +675,7 @@ export function Talks(props: TalksProps) {
     : null;
 
   return (
-    <TalksReactContext.Provider value={context}>
+    <TalksReactContext.Provider value={boundary.context}>
       <section
         ref={rootRef}
         className={`wanderer${className ? ` ${className}` : ''}`}
@@ -551,16 +692,21 @@ export function Talks(props: TalksProps) {
         onKeyDown={handleKeyDown}
         onWheel={trackpadGestures ? handleWheel : undefined}
       >
-        {customBreakpointStyle && <style>{customBreakpointStyle}</style>}
+        {/* Raw HTML, not a text child: React 18's server renderer escapes the
+            quotes in a <style> text child, which breaks the selector and hydration.
+            The content is built only from a number and a useId id. */}
+        {customBreakpointStyle && <style dangerouslySetInnerHTML={{ __html: customBreakpointStyle }} />}
         {shells.map((shell) => {
           const view = registry.views.find((item) => item.id === shell.view);
           const headingId = shell.view ? viewHeadingId(shell.view) : undefined;
           const exitView = registry.views.find((item) => item.id !== view?.id && item.presentation !== 'immersive');
           const exit = () => { if (exitView) setView(exitView.id, 'user'); };
+          const immersive = fullscreenAllowed && view?.presentation === 'immersive' && !!exitView;
+          const immersiveBody = boundary.fullscreenAllowed && view?.presentation === 'immersive' && !!exitView;
           return (
             <ViewShell
               key={shell.key}
-              immersive={view?.presentation === 'immersive' && !!exitView}
+              immersive={immersive}
               active={!pending}
               headingId={headingId}
               className={`wanderer-shell ${shell.modifier}`}
@@ -569,7 +715,7 @@ export function Talks(props: TalksProps) {
               onExit={exit}
               onEscape={() => { if (escapeToList && !isModalOpen?.()) exit(); }}
             >
-              <Toolbar context={context} activeView={shell.view} shellKey={shell.key} />
+              <Toolbar context={context} activeView={shell.view} shellKey={shell.key} search={search} filters={filters} hasActiveFilters={liveHasActiveFilters} />
               {view && headingId && (
                 <div className="wanderer-view" data-wanderer-view-id={view.id}>
                   <Heading
@@ -584,16 +730,21 @@ export function Talks(props: TalksProps) {
                     resetKey={view.id}
                     fallback={<p className="wanderer-error" role="alert">{copy.pluginError}</p>}
                   >
-                    <view.Component context={context} active={!pending} headingId={headingId} viewId={view.id} />
+                    <ViewBody
+                      Component={view.Component}
+                      context={boundary.context}
+                      active={!boundary.pending}
+                      headingId={headingId}
+                      viewId={view.id}
+                      presentation={immersiveBody ? 'immersive' : 'inline'}
+                    />
                   </ErrorBoundary>
                 </div>
               )}
               {!view && (
                 <p className="wanderer-empty__title">{copy.noTalks}</p>
               )}
-              <p className="wanderer-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
-                {announcement}
-              </p>
+              <Announcement text={announcement} />
             </ViewShell>
           );
         })}

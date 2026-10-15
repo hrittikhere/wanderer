@@ -11,6 +11,12 @@ import { compareIds } from './ids.js';
 
 export { compareIds };
 
+/**
+ * The default responsive breakpoint in CSS pixels. Defined here, outside any
+ * `"use client"` module, so a Server Component that imports it gets the number.
+ */
+export const DEFAULT_BREAKPOINT = 1024;
+
 /** Reject overflow dates rather than allowing JavaScript's automatic normalization. */
 export function parseCalendarDate(value: unknown): Date | null {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -22,6 +28,22 @@ export function parseCalendarDate(value: unknown): Date | null {
     && date.getUTCMonth() + 1 === month && date.getUTCDate() === day ? date : null;
 }
 
+const FORMATTER_CACHE_LIMIT = 64;
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+/** Constructing Intl.DateTimeFormat costs far more than formatting, so instances are reused per locale and options. */
+function utcFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale}\u0000${JSON.stringify(options)}`;
+  let formatter = formatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, { ...options, timeZone: 'UTC' });
+    const oldest = formatters.size >= FORMATTER_CACHE_LIMIT ? formatters.keys().next().value : undefined;
+    if (oldest !== undefined) formatters.delete(oldest);
+    formatters.set(key, formatter);
+  }
+  return formatter;
+}
+
 export function formatCalendarDate(
   value: unknown,
   locale = 'en-US',
@@ -29,7 +51,7 @@ export function formatCalendarDate(
   undated = 'Undated',
 ): string {
   const date = parseCalendarDate(value);
-  return date ? new Intl.DateTimeFormat(locale, { ...options, timeZone: 'UTC' }).format(date) : undated;
+  return date ? utcFormatter(locale, options).format(date) : undated;
 }
 
 export function isUpcoming(value: unknown, referenceDate: unknown): boolean {
@@ -40,26 +62,32 @@ export function isUpcoming(value: unknown, referenceDate: unknown): boolean {
 
 /** Valid dates precede undated entries; ties always use ascending ID ordering. */
 export function sortTalks<T extends Talk>(talks: readonly T[], order: 'asc' | 'desc' = 'desc'): T[] {
-  return [...talks].sort((a, b) => {
-    const left = parseCalendarDate(a.date)?.getTime();
-    const right = parseCalendarDate(b.date)?.getTime();
+  // Parse each date once up front; parsing inside the comparator repeats it O(n log n) times.
+  const keyed = talks.map((talk) => ({ talk, time: parseCalendarDate(talk.date)?.getTime() }));
+  return keyed.sort(({ talk: a, time: left }, { talk: b, time: right }) => {
     if (left === undefined && right !== undefined) return 1;
     if (right === undefined && left !== undefined) return -1;
     if (left !== undefined && right !== undefined && left !== right) {
       return order === 'asc' ? left - right : right - left;
     }
     return compareIds(a.id, b.id);
-  });
+  }).map(({ talk }) => talk);
 }
 
 export function locationLabel(location: Talk['location']): string {
   return typeof location === 'string' ? location : [location?.city, location?.country].filter(Boolean).join(', ');
 }
 
-/** "City, Region, Country" splits on the first and last comma; a bare string is the city. */
+/**
+ * "City, Region, Country" splits on the first and last comma; a bare string is the city.
+ * Segments are trimmed and empty ones dropped first, so ", Portugal" reads as the bare string "Portugal".
+ */
 export function locationParts(location: Talk['location']): { city?: string; country?: string } {
   if (!location) return {};
-  if (typeof location !== 'string') return { city: location.city, country: location.country };
+  if (typeof location !== 'string') {
+    const { city, country } = location as { city?: unknown; country?: unknown };
+    return { ...(typeof city === 'string' ? { city } : {}), ...(typeof country === 'string' ? { country } : {}) };
+  }
   const parts = location.split(',').map((part) => part.trim()).filter(Boolean);
   if (parts.length === 0) return {};
   if (parts.length === 1) return { city: parts[0] };
@@ -97,6 +125,14 @@ export function filterTalks<T extends Talk>(talks: readonly T[], options: Filter
   });
 }
 
+/** The year, or range of years, that a newest-first group of dated talks spans in the locale's calendar and digits. */
+function localizedYearLabel(entries: readonly Talk[], locale: string): string {
+  const formatter = utcFormatter(locale, { year: 'numeric' });
+  const newest = parseCalendarDate(entries[0].date)!;
+  const oldest = parseCalendarDate(entries[entries.length - 1].date)!;
+  return typeof formatter.formatRange === 'function' ? formatter.formatRange(oldest, newest) : formatter.format(newest);
+}
+
 export function groupTalks(talks: readonly Talk[], options: GroupOptions = {}): TalkGroup[] {
   const upcomingMode = options.upcoming ?? 'separate';
   const upcoming = upcomingMode === 'none' ? [] : sortTalks(
@@ -109,12 +145,15 @@ export function groupTalks(talks: readonly Talk[], options: GroupOptions = {}): 
     const date = parseCalendarDate(talk.date);
     if (!date) { undated.push(talk); continue; }
     const year = String(date.getUTCFullYear());
-    years.set(year, [...(years.get(year) ?? []), talk]);
+    const bucket = years.get(year);
+    if (bucket) bucket.push(talk);
+    else years.set(year, [talk]);
   }
   const groups: TalkGroup[] = [];
   if (upcoming.length) groups.push({ id: 'upcoming', label: options.upcomingLabel ?? 'Upcoming', talks: upcoming });
   for (const [year, entries] of [...years].sort(([a], [b]) => Number(b) - Number(a))) {
-    groups.push({ id: `year-${year}`, label: year, talks: entries });
+    const label = options.locale === undefined ? year : localizedYearLabel(entries, options.locale);
+    groups.push({ id: `year-${year}`, label, talks: entries });
   }
   if (undated.length) groups.push({ id: 'undated', label: options.undatedLabel ?? 'Undated', talks: undated });
   return groups;
@@ -126,7 +165,8 @@ export function safeUrl(value: unknown, options: { allowRelative?: boolean } = {
   if (options.allowRelative && /^(?:\/(?!\/)|\.{1,2}\/|#|\?)/.test(value)) return value;
   try {
     const parsed = new URL(value);
-    if ((parsed.protocol === 'https:' || parsed.protocol === 'http:') && parsed.hostname && !parsed.username && !parsed.password) return value;
+    // Require the `//` authority marker: an href like `https:host/x` resolves against the page on a same-scheme site.
+    if ((parsed.protocol === 'https:' || parsed.protocol === 'http:') && /^https?:\/\//i.test(value) && parsed.hostname && !parsed.username && !parsed.password) return value;
     if ((parsed.protocol === 'mailto:' || parsed.protocol === 'tel:') && parsed.pathname) return value;
   } catch { /* The caller receives a missing link; validators explain the cause. */ }
   return undefined;
@@ -180,13 +220,41 @@ export function resolveTalkCoordinates(talk: Talk, options: GeographyOptions = {
   return validCoordinates(value) ? value : undefined;
 }
 
+const EARTH_RADIUS_KM = 6371.0088;
+
 /** Great-circle kilometers, naturally handling locations on either side of ±180°. */
 export function geographicDistanceKm(a: Coordinates, b: Coordinates): number {
   const radians = Math.PI / 180;
   const halfLat = Math.sin((b[0] - a[0]) * radians / 2);
   const halfLng = Math.sin((b[1] - a[1]) * radians / 2);
   const haversine = halfLat ** 2 + Math.cos(a[0] * radians) * Math.cos(b[0] * radians) * halfLng ** 2;
-  return 2 * 6371.0088 * Math.asin(Math.sqrt(Math.max(0, Math.min(1, haversine))));
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(Math.max(0, Math.min(1, haversine))));
+}
+
+/** Below a millimeter two coordinates are one point, such as longitude 180 and -180 or two longitudes at a pole. */
+const SAME_POINT_KM = 1e-6;
+
+/** A point on the unit sphere. Nearby points have nearby vectors on both sides of the antimeridian and at the poles. */
+function unitVector([latitude, longitude]: Coordinates): [number, number, number] {
+  const lat = latitude * Math.PI / 180;
+  const lng = longitude * Math.PI / 180;
+  return [Math.cos(lat) * Math.cos(lng), Math.cos(lat) * Math.sin(lng), Math.sin(lat)];
+}
+
+/** Newest dated talk first, undated last, ties by ascending id: the first talk `sortTalks` would return. */
+function newerTalk(a: Talk, b: Talk, times: Map<Talk, number | undefined>): Talk {
+  const time = (talk: Talk) => {
+    if (!times.has(talk)) times.set(talk, parseCalendarDate(talk.date)?.getTime());
+    return times.get(talk);
+  };
+  const left = time(a);
+  const right = time(b);
+  if (left !== right) {
+    if (left === undefined) return b;
+    if (right === undefined) return a;
+    return right > left ? b : a;
+  }
+  return compareIds(a.id, b.id) <= 0 ? a : b;
 }
 
 export function deriveGeography(talks: readonly Talk[], options: GeographyOptions = {}): Geography {
@@ -195,6 +263,15 @@ export function deriveGeography(talks: readonly Talk[], options: GeographyOption
   const mappedTalks: Talk[] = [];
   const markers: GlobeMarker[] = [];
   const regionCounts = new Map<string, number>();
+  const unlabeled = new Set<GlobeMarker>();
+  const times = new Map<Talk, number | undefined>();
+  // Hosts are bucketed in a grid over unit-sphere vectors whose cell is the
+  // chord of the merge distance, so every host within reach sits in one of the
+  // 27 cells around a point: lookups cost the same however many hosts exist.
+  const mergeLimit = Math.max(mergeDistanceKm, SAME_POINT_KM);
+  const cell = Math.max(2 * Math.sin(Math.min(mergeLimit / EARTH_RADIUS_KM, Math.PI) / 2), 1e-12);
+  const grid = new Map<number, Map<number, Map<number, number[]>>>();
+  const bucketAt = (x: number, y: number, z: number) => grid.get(x)?.get(y)?.get(z);
   // Stable ID hosts the first marker; nearest existing host wins, then stable host ID.
   for (const talk of [...talks].sort((a, b) => compareIds(a.id, b.id))) {
     const coordinates = resolveTalkCoordinates(talk, options);
@@ -205,15 +282,48 @@ export function deriveGeography(talks: readonly Talk[], options: GeographyOption
       const region = assigned || (options.unassignedRegion === undefined ? 'Unassigned' : options.unassignedRegion);
       if (region !== null) regionCounts.set(region, (regionCounts.get(region) ?? 0) + 1);
     }
-    const nearest = markers.map((marker) => ({ marker, distance: geographicDistanceKm(marker.coordinates, coordinates) }))
-      .filter(({ distance }) => distance <= mergeDistanceKm)
-      .sort((a, b) => a.distance - b.distance || compareIds(a.marker.id, b.marker.id))[0]?.marker;
-    if (nearest) {
+    const vector = unitVector(coordinates);
+    const x = Math.floor(vector[0] / cell);
+    const y = Math.floor(vector[1] / cell);
+    const z = Math.floor(vector[2] / cell);
+    // Markers are created in id order, so the lowest index wins distance ties: the lowest host id.
+    let nearestIndex = -1;
+    let nearestDistance = Infinity;
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dz = -1; dz <= 1; dz += 1) {
+          const bucket = bucketAt(x + dx, y + dy, z + dz);
+          if (!bucket) continue;
+          for (const index of bucket) {
+            const distance = geographicDistanceKm(markers[index].coordinates, coordinates);
+            if (!(distance <= mergeDistanceKm || distance < SAME_POINT_KM)) continue;
+            if (distance < nearestDistance || (distance === nearestDistance && index < nearestIndex)) {
+              nearestIndex = index;
+              nearestDistance = distance;
+            }
+          }
+        }
+      }
+    }
+    const label = locationLabel(talk.location);
+    if (nearestIndex >= 0) {
+      const nearest = markers[nearestIndex];
       nearest.talks.push(talk);
       nearest.count += 1;
-      nearest.latestTalk = sortTalks([nearest.latestTalk, talk])[0];
+      nearest.latestTalk = newerTalk(nearest.latestTalk, talk, times);
+      // A host without a location takes the first label among its merged talks.
+      if (label && unlabeled.delete(nearest)) nearest.label = label;
     } else {
-      markers.push({ id: talk.id, coordinates, label: locationLabel(talk.location) || `${coordinates[0]}, ${coordinates[1]}`, count: 1, talks: [talk], latestTalk: talk });
+      const marker: GlobeMarker = { id: talk.id, coordinates, label: label || `${coordinates[0]}, ${coordinates[1]}`, count: 1, talks: [talk], latestTalk: talk };
+      if (!label) unlabeled.add(marker);
+      let plane = grid.get(x);
+      if (!plane) grid.set(x, plane = new Map());
+      let row = plane.get(y);
+      if (!row) plane.set(y, row = new Map());
+      const bucket = row.get(z);
+      if (bucket) bucket.push(markers.length);
+      else row.set(z, [markers.length]);
+      markers.push(marker);
     }
   }
   return {
@@ -231,13 +341,14 @@ export function validateTalks(input: unknown, options: ValidationOptions = {}): 
     return { ...result, valid: false, errors: [{ index: -1, field: 'talks', code: 'invalid_type', message: 'Expected an array of talks.' }] };
   }
   const ids = new Set<string>();
-  input.forEach((entry: unknown, index) => {
+  // Array.from turns holes into undefined, so a sparse entry is diagnosed instead of skipped.
+  Array.from(input).forEach((entry: unknown, index) => {
     const source = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry as Record<string, unknown> : {};
     const talkId = typeof source.id === 'string' ? source.id : undefined;
     const error = (field: string, code: string, message: string) => { result.errors.push({ index, talkId, field, code, message }); };
     const warning = (field: string, code: string, message: string) => { result.warnings.push({ index, talkId, field, code, message }); };
     const missingIdentity = ['id', 'title', 'event'].filter((key) => typeof source[key] !== 'string' || !(source[key] as string).trim());
-    for (const key of missingIdentity) error(key, 'required', `A nonempty ${key} is required.`);
+    for (const key of missingIdentity) error(key, 'required', `A nonempty ${key} string is required.`);
     if (missingIdentity.length) return;
     const id = source.id as string;
     // Ids become DOM ids and aria-controls IDREFs, where any whitespace splits the reference.
@@ -254,12 +365,12 @@ export function validateTalks(input: unknown, options: ValidationOptions = {}): 
       description: typeof source.description === 'string' ? source.description : '',
       format: format === 'in-person' || format === 'hybrid' ? format : 'online',
     };
-    if (typeof source.location === 'string') talk.location = source.location;
+    if (typeof source.location === 'string' && source.location.trim()) talk.location = source.location;
     else if (source.location && typeof source.location === 'object') {
       const location = source.location as Record<string, unknown>;
-      if (typeof location.city === 'string' && typeof location.country === 'string') talk.location = { city: location.city, country: location.country };
-      else warning('location', 'invalid_location', 'Expected a string or an object containing city and country strings.');
-    } else if (source.location !== undefined) warning('location', 'invalid_location', 'Expected a string or a city/country object.');
+      if (typeof location.city === 'string' && typeof location.country === 'string' && (location.city.trim() || location.country.trim())) talk.location = { city: location.city, country: location.country };
+      else warning('location', 'invalid_location', 'Expected a string or an object containing city and country strings, not both blank.');
+    } else if (source.location !== undefined) warning('location', 'invalid_location', 'Expected a nonblank string or a city/country object.');
     if (source.coordinates !== undefined) {
       if (validCoordinates(source.coordinates)) talk.coordinates = [...source.coordinates];
       else error('coordinates', 'invalid_coordinates', 'Expected finite latitude [-90, 90] and longitude [-180, 180].');
@@ -274,7 +385,7 @@ export function validateTalks(input: unknown, options: ValidationOptions = {}): 
     if (Array.isArray(source.links)) {
       const links: TalkLink[] = [];
       const linkIds = new Set<string>();
-      source.links.forEach((item: unknown, linkIndex: number) => {
+      Array.from(source.links).forEach((item: unknown, linkIndex: number) => {
         const field = `links[${linkIndex}]`;
         if (!item || typeof item !== 'object') { warning(field, 'invalid_link', 'Expected an object with a link kind and URL.'); return; }
         const link = item as Record<string, unknown>;
@@ -292,13 +403,19 @@ export function validateTalks(input: unknown, options: ValidationOptions = {}): 
           } else {
             linkId = link.id;
           }
+        } else if (link.id !== undefined) {
+          warning(`${field}.id`, 'invalid_link_id', 'Link ids must be strings; the id was dropped.');
         }
         if (linkId !== undefined) linkIds.add(linkId);
-        links.push({ kind, url, ...(linkId !== undefined ? { id: linkId } : {}), ...(typeof link.label === 'string' ? { label: link.label } : {}) });
+        // A blank label would leave an icon-only action whose accessible name has no action text.
+        const label = typeof link.label === 'string' && link.label.trim() ? link.label : undefined;
+        if (label === undefined && link.label !== undefined) warning(`${field}.label`, 'invalid_link_label', 'Link labels must be nonblank strings; the default action label is used.');
+        links.push({ kind, url, ...(linkId !== undefined ? { id: linkId } : {}), ...(label !== undefined ? { label } : {}) });
       });
       talk.links = links;
     }
     if (Array.isArray(source.tags)) talk.tags = source.tags.filter((tag): tag is string => typeof tag === 'string');
+    else if (source.tags !== undefined) warning('tags', 'invalid_tags', 'Expected an array of strings.');
     result.talks.push(talk);
   });
   result.valid = result.errors.length === 0;
