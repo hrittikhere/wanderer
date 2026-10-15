@@ -41,6 +41,7 @@ export function createDefaultCopy(): TalksCopy {
     unassignedRegion: 'Other',
     unknownLocation: 'Unknown location',
     globeLabel: 'Interactive globe of talk locations',
+    globePanelLabel: 'Talk locations',
     globeHint: 'Drag to rotate. Hover a marker for details.',
     milestones: 'Milestones',
     chooseMilestone: 'Choose a milestone',
@@ -67,6 +68,7 @@ export function createDefaultCopy(): TalksCopy {
     locationCount: (count) => `${count} ${count === 1 ? 'talk' : 'talks'}`,
     regionPercentage: (percentage) => `${percentage.toFixed(1)}%`,
     actionLabel: (action, title) => `${action}: ${title}`,
+    milestoneShown: (title) => `Milestone: ${title}`,
   };
 }
 

@@ -38,6 +38,10 @@
 - `enabledViews` that matches no view, a repeated id in `views` (other than replacing `list`), and view ids with whitespace now throw clear errors; `registerPlugins` names a non-object entry.
 - Trackpad gestures reset after a 300 ms pause and ignore wheel input over horizontally scrollable content.
 - A lone combining accent is not an active search; `mergeCopy` ignores `null` as well as `undefined`; group heading ids stay unique when list pieces render in two shells or views.
+- `globeView()` returns the same component for equal options, so an inline `views={[globeView()]}` no longer remounts the globe on every parent render. `GlobeView` works directly as a view component (`options` defaults to `{}`).
+- The WebGL context-loss grace period counts only while the globe is visible and is cleared when the renderer is replaced, so a hidden tab or an emptied and refilled marker set no longer ends in a false runtime fallback.
+- Milestone coordinates are validated like a talk's; keyboard focus inside a milestone card holds it open and Dismiss moves focus to the select; a milestone chosen in the select is announced; the placeholder no longer pauses motion.
+- The globe panel has its own name (`copy.globePanelLabel`), the drag hint disappears under the fallbacks, only the open location panel renders its talks, the location list skips re-rendering on milestone changes, and the visibility subscription is no longer renewed on every render.
 - Types: `view`, `search`, `filters` and `copy` (now `CopyOverrides`) accept an explicit `undefined` under `exactOptionalPropertyTypes`; `ToolbarProps`, `HeadingProps`, `ErrorBoundaryProps`, `GlobeViewProps` and `ControllableUpdate` are exported, and `Toolbar` gained optional `search`, `filters` and `hasActiveFilters` props.
 
 All notable changes to `@wanderer/talks` are recorded here. The format follows Keep a Changelog, and the project follows Semantic Versioning.

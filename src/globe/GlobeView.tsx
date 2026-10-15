@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
+  memo, useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
   type ComponentType, type ReactNode, type RefObject,
 } from 'react';
 import type { GlobeAsideProps, TalkViewProps, TalksContext, ViewContribution } from '../component-types.js';
@@ -10,7 +10,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { Heading } from '../components/Heading.js';
 import { GlobeIcon } from '../components/icons.js';
 import { EmptyState } from '../components/ListView.js';
-import { compareIds, parseCalendarDate, resolveTalkCoordinates, safeUrl } from '../helpers.js';
+import { compareIds, parseCalendarDate, resolveTalkCoordinates, safeUrl, validCoordinates } from '../helpers.js';
 import { useIsClient, usePrefersReducedMotion } from '../hooks.js';
 import { compositeOver, parseCssColor, readCanvasColor, type Rgba } from './colors.js';
 import type { GlobeColors, GlobeRendererProps, PositionedMilestone, Rgb } from './renderer-types.js';
@@ -159,16 +159,17 @@ function toDomId(id: string): string {
   return encodeURIComponent(id);
 }
 
+// Module-level so the subscription survives re-renders (a new function would resubscribe on every keystroke).
+function subscribeToVisibility(onChange: () => void): () => void {
+  if (typeof document === 'undefined') return () => {};
+  document.addEventListener('visibilitychange', onChange);
+  return () => document.removeEventListener('visibilitychange', onChange);
+}
+const documentVisible = () => (typeof document === 'undefined' ? true : document.visibilityState !== 'hidden');
+const visibleOnServer = () => true;
+
 function useDocumentVisible(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      if (typeof document === 'undefined') return () => {};
-      document.addEventListener('visibilitychange', onChange);
-      return () => document.removeEventListener('visibilitychange', onChange);
-    },
-    () => (typeof document === 'undefined' ? true : document.visibilityState !== 'hidden'),
-    () => true,
-  );
+  return useSyncExternalStore(subscribeToVisibility, documentVisible, visibleOnServer);
 }
 
 function useOnScreen(ref: RefObject<Element | null>): boolean {
@@ -205,7 +206,7 @@ function latestYear(marker: GlobeMarker, formatDate: TalksContext['formatDate'])
 }
 
 /** Keyboard-accessible equivalent of the canvas: regions, locations, and the talks at each location. */
-export function GlobeRegionList({
+export const GlobeRegionList = memo(function GlobeRegionList({
   context, geography, expanded, onToggle,
 }: GlobeAsideProps & { expanded?: string | null; onToggle?: (id: string | null) => void }) {
   const { copy, headingLevel } = context;
@@ -256,22 +257,27 @@ export function GlobeRegionList({
                     <span className="wanderer-globe__location-name">{marker.label || copy.unknownLocation}</span>
                     <span className="wanderer-globe__location-value">{copy.regionPercentage(share)}</span>
                   </button>
+                  {/* Only the open panel holds its talks: closed panels are hidden from everyone, and a long history would otherwise ship every talk twice. */}
                   <div id={panelId} className="wanderer-globe__location-panel" hidden={!open}>
-                    <p className="wanderer-globe__location-summary">
-                      <span>{copy.locationCount(marker.count)}</span>
-                      {latestYear(marker, context.formatDate) && <span>{copy.latest}: {latestYear(marker, context.formatDate)}</span>}
-                    </p>
-                    <ul className="wanderer-globe__location-talks">
-                      {marker.talks.map((talk) => {
-                        const primary = context.getPrimaryLink(talk);
-                        return (
-                          <li key={talk.id}>
-                            {primary ? context.renderLink(primary, talk.title, talk) : <span>{talk.title}</span>}
-                            <span className="wanderer-globe__location-event"> {talk.event}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                    {open && (
+                      <>
+                        <p className="wanderer-globe__location-summary">
+                          <span>{copy.locationCount(marker.count)}</span>
+                          {latestYear(marker, context.formatDate) && <span>{copy.latest}: {latestYear(marker, context.formatDate)}</span>}
+                        </p>
+                        <ul className="wanderer-globe__location-talks">
+                          {marker.talks.map((talk) => {
+                            const primary = context.getPrimaryLink(talk);
+                            return (
+                              <li key={talk.id}>
+                                {primary ? context.renderLink(primary, talk.title, talk) : <span>{talk.title}</span>}
+                                <span className="wanderer-globe__location-event"> {talk.event}</span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </>
+                    )}
                   </div>
                 </li>
               );
@@ -281,7 +287,7 @@ export function GlobeRegionList({
       </section>
     </div>
   );
-}
+});
 
 function DefaultOverlayCard({ milestone, context }: { milestone: PositionedMilestone; context: TalksContext }) {
   const MilestoneImage = context.ImageComponent;
@@ -315,10 +321,13 @@ function GlobeFallback({ kind, context }: { kind: GlobeErrorKind | 'empty'; cont
 }
 
 export interface GlobeViewProps extends TalkViewProps {
-  options: GlobeViewOptions;
+  /** Defaults to `{}`, so `GlobeView` also works directly as a view `Component`. */
+  options?: GlobeViewOptions;
 }
 
-export function GlobeView({ context, active, options, presentation: shellPresentation }: GlobeViewProps) {
+const NO_OPTIONS: GlobeViewOptions = {};
+
+export function GlobeView({ context, active, options = NO_OPTIONS, presentation: shellPresentation }: GlobeViewProps) {
   const isClient = useIsClient();
   const reducedMotion = usePrefersReducedMotion();
   const documentVisible = useDocumentVisible();
@@ -333,6 +342,10 @@ export function GlobeView({ context, active, options, presentation: shellPresent
   const [motionPaused, setMotionPaused] = useState(false);
   const automatic = !motionPaused && !reducedMotion;
   const [expandedMarker, setExpandedMarker] = useState<string | null>(null);
+  /** A milestone the visitor picked in the select, announced politely (automatic callouts are not). */
+  const [chosenMilestoneId, setChosenMilestoneId] = useState<string | null>(null);
+  const selectRef = useRef<HTMLSelectElement>(null);
+  const calloutId = useId();
   const colors = useGlobeColors(stageRef, colorScheme, theme);
   // The presentation the shell actually uses, which is inline whenever fullscreen is not open.
   const presentation = shellPresentation ?? options.presentation ?? 'inline';
@@ -380,7 +393,10 @@ export function GlobeView({ context, active, options, presentation: shellPresent
       if (seen.has(milestone.id)) return [];
       seen.add(milestone.id);
       const talk = milestone.talkId ? byId.get(milestone.talkId) : undefined;
-      const coordinates = milestone.coordinates ?? (talk ? resolveTalkCoordinates(talk, context.geographyOptions) : undefined);
+      // Explicit coordinates are checked like a talk's: a non-finite or out-of-range pair falls back to the talk, or drops the milestone.
+      const coordinates = validCoordinates(milestone.coordinates)
+        ? milestone.coordinates
+        : talk ? resolveTalkCoordinates(talk, context.geographyOptions) : undefined;
       return coordinates ? [{ ...milestone, coordinates }] : [];
     });
   }, [milestones, geography.mappedTalks, context.geographyOptions]);
@@ -394,30 +410,54 @@ export function GlobeView({ context, active, options, presentation: shellPresent
     setStatus('error');
   }, []);
   const handleRuntimeError = useCallback(() => fail('runtime'), [fail]);
-  // A lost context usually comes back within a frame or two; past the grace period the fallback takes over.
+  const paused = !documentVisible || !onScreen;
+  // A lost context usually comes back within a frame or two; past the grace
+  // period the fallback takes over. The grace only counts while the globe is
+  // visible: a hidden page or an offscreen stage gets the full period once it
+  // is shown again, and a renderer that is replaced takes its loss with it.
+  const contextLostRef = useRef(false);
   const contextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleContextLost = useCallback(() => {
-    setActiveMilestoneId(null);
-    if (contextTimerRef.current !== null) return;
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+  const clearContextTimer = useCallback(() => {
+    if (contextTimerRef.current !== null) clearTimeout(contextTimerRef.current);
+    contextTimerRef.current = null;
+  }, []);
+  const startContextTimer = useCallback(() => {
+    if (contextTimerRef.current !== null || pausedRef.current) return;
     contextTimerRef.current = setTimeout(() => {
       contextTimerRef.current = null;
+      contextLostRef.current = false;
       fail('runtime');
     }, CONTEXT_RESTORE_GRACE_MS);
   }, [fail]);
+  const handleContextLost = useCallback(() => {
+    setActiveMilestoneId(null);
+    contextLostRef.current = true;
+    startContextTimer();
+  }, [startContextTimer]);
   const handleContextRestored = useCallback(() => {
-    if (contextTimerRef.current === null) return;
-    clearTimeout(contextTimerRef.current);
-    contextTimerRef.current = null;
-  }, []);
-  useEffect(() => () => { if (contextTimerRef.current !== null) clearTimeout(contextTimerRef.current); }, []);
-  const paused = !documentVisible || !onScreen;
+    contextLostRef.current = false;
+    clearContextTimer();
+  }, [clearContextTimer]);
+  useEffect(() => {
+    if (paused) clearContextTimer();
+    else if (contextLostRef.current) startContextTimer();
+  }, [paused, clearContextTimer, startContextTimer]);
+  useEffect(() => clearContextTimer, [clearContextTimer]);
 
   // The renderer is the only thing that activates milestones; when it is gone
   // (no mapped talks, an error) the callout must go with it.
   const rendererShown = isClient && hasMarkers && status === 'ready' && Renderer !== null;
   useEffect(() => {
-    if (!rendererShown) setActiveMilestoneId(null);
-  }, [rendererShown]);
+    if (rendererShown) return;
+    setActiveMilestoneId(null);
+    // The canvas that lost its context is gone; a new one starts healthy.
+    contextLostRef.current = false;
+    clearContextTimer();
+  }, [rendererShown, clearContextTimer]);
+  // The fallbacks replace the canvas, so its drag and hover hint would describe nothing.
+  const canDraw = hasMarkers && status !== 'error';
 
   let stage: ReactNode;
   if (isClient && !hasMarkers) {
@@ -462,10 +502,19 @@ export function GlobeView({ context, active, options, presentation: shellPresent
   }
 
   const callout = activeMilestone && rendererShown ? (
-    <div className="wanderer-globe__callout" data-wanderer-milestone={activeMilestone.id}>
+    <div
+      id={calloutId}
+      className="wanderer-globe__callout"
+      data-wanderer-milestone={activeMilestone.id}
+      // Keyboard focus inside the card holds it open: automatic motion (and its timed dismissal) pauses.
+      onFocus={() => setMotionPaused(true)}
+    >
       <button type="button" className="wanderer-button wanderer-globe__dismiss" onClick={() => {
         setMotionPaused(true);
         setActiveMilestoneId(null);
+        setChosenMilestoneId(null);
+        // The focused button is about to disappear; keep focus in the globe controls.
+        selectRef.current?.focus();
       }}>{copy.dismissMilestone}</button>
       {OverlayCard ? <OverlayCard milestone={activeMilestone} context={context} /> : <DefaultOverlayCard milestone={activeMilestone} context={context} />}
     </div>
@@ -491,22 +540,34 @@ export function GlobeView({ context, active, options, presentation: shellPresent
             {stage}
             {calloutPlacement === 'beside' && callout}
           </div>
-          <p className="wanderer-globe__hint">{copy.globeHint}</p>
+          {canDraw && <p className="wanderer-globe__hint">{copy.globeHint}</p>}
           {rendererShown && (
             <div className="wanderer-globe__controls">
               {!reducedMotion && <button type="button" className="wanderer-button" onClick={() => setMotionPaused(!motionPaused)}>{motionPaused ? copy.resumeGlobe : copy.pauseGlobe}</button>}
               {positionedMilestones.length > 0 && (
                 <label className="wanderer-globe__milestones">
                   <span>{copy.milestones}</span>
-                  <select value={activeMilestoneId ?? ''} onChange={(event) => {
-                    setMotionPaused(true);
-                    setActiveMilestoneId(event.target.value || null);
-                  }}>
+                  <select
+                    ref={selectRef}
+                    value={activeMilestoneId ?? ''}
+                    aria-controls={activeMilestone ? calloutId : undefined}
+                    onChange={(event) => {
+                      const id = event.target.value || null;
+                      // Choosing a milestone pauses automatic motion; the placeholder only clears the selection.
+                      if (id) setMotionPaused(true);
+                      setActiveMilestoneId(id);
+                      setChosenMilestoneId(id);
+                    }}
+                  >
                     <option value="">{copy.chooseMilestone}</option>
                     {positionedMilestones.map((milestone) => <option key={milestone.id} value={milestone.id}>{milestone.title}</option>)}
                   </select>
                 </label>
               )}
+              {/* Beside the stage the card precedes these controls in reading order; announce a chosen one. */}
+              <p className="wanderer-visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-wanderer-announcement="milestone">
+                {activeMilestone && activeMilestone.id === chosenMilestoneId ? copy.milestoneShown(activeMilestone.title) : ''}
+              </p>
             </div>
           )}
           {calloutPlacement !== 'beside' && callout}
@@ -517,7 +578,7 @@ export function GlobeView({ context, active, options, presentation: shellPresent
           )}
         </div>
         <aside className="wanderer-globe__panel" aria-labelledby={headingId}>
-          <Heading level={context.headingLevel + 1} id={headingId} className="wanderer-visually-hidden">{copy.globeLabel}</Heading>
+          <Heading level={context.headingLevel + 1} id={headingId} className="wanderer-visually-hidden">{copy.globePanelLabel}</Heading>
           <div className="wanderer-globe__panel-scroll">
             <GlobeRegionList context={context} geography={geography} expanded={expandedMarker} onToggle={setExpandedMarker} />
             {GlobeAside && <GlobeAside context={context} geography={geography} />}
@@ -529,9 +590,26 @@ export function GlobeView({ context, active, options, presentation: shellPresent
   );
 }
 
+/**
+ * One component per combination of the options GlobeView reads, so calling
+ * `globeView()` again with equal options (for example in an inline `views`
+ * array) yields the same component and React keeps the mounted globe.
+ */
+const viewComponents = new Map<string, ComponentType<TalkViewProps>>();
+function globeViewComponent(options: GlobeViewOptions): ComponentType<TalkViewProps> {
+  const behavior: GlobeViewOptions = { presentation: options.presentation, intro: options.intro, autoRotate: options.autoRotate };
+  const key = `${behavior.presentation}|${behavior.intro}|${behavior.autoRotate}`;
+  let Component = viewComponents.get(key);
+  if (!Component) {
+    Component = function GlobeViewWithOptions(props: TalkViewProps) { return <GlobeView {...props} options={behavior} />; };
+    viewComponents.set(key, Component);
+  }
+  return Component;
+}
+
 /** The globe view contribution (reserved id `globe`). Pass it through `views` on `<Talks>`. */
 export function globeView(options: GlobeViewOptions = {}): ViewContribution {
-  const Component = (props: TalkViewProps) => <GlobeView {...props} options={options} />;
+  const Component = globeViewComponent(options);
   return {
     id: 'globe',
     order: options.order ?? 10,

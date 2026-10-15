@@ -90,7 +90,7 @@ test('fullscreen keeps search, focus and exit inside the dialog', async ({ page 
   await page.keyboard.press('Escape');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('searchbox')).toHaveValue('');
-  await expect(dialog.locator('[role="status"][aria-atomic="true"]')).toHaveCount(1);
+  await expect(dialog.locator('[role="status"][data-wanderer-announcement="results"]')).toHaveCount(1);
   await dialog.getByRole('button', { name: 'Exit fullscreen' }).focus();
   await page.keyboard.press('Shift+Tab');
   expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);

@@ -68,7 +68,7 @@ function Announcement({ text }: { text: string }) {
     const timer = setTimeout(() => setSpoken(text), ANNOUNCE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [text]);
-  return <p className="wanderer-visually-hidden" role="status" aria-live="polite" aria-atomic="true">{spoken}</p>;
+  return <p className="wanderer-visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-wanderer-announcement="results">{spoken}</p>;
 }
 
 /**

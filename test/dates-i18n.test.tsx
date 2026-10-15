@@ -4,7 +4,8 @@ import { act, createElement } from 'react';
 import type { Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { Talks } from '../src/index.js';
-import { globeView } from '../src/globe.js';
+import { GlobeRegionList, globeView } from '../src/globe.js';
+import type { TalkViewProps } from '../src/component-types.js';
 import { facingPhi, projectMarker } from '../src/globe/projection.js';
 import { formatCalendarDate, groupTalks, sortTalks } from '../src/helpers.js';
 import { click, installDom } from './support/dom.js';
@@ -81,8 +82,12 @@ describe('year labels follow the locale', () => {
   });
 
   test('the globe location list formats the latest year in the locale', () => {
+    // Only the open location panel renders its summary, so open Lisbon.
+    const OpenLisbon = ({ context }: TalkViewProps) => createElement(GlobeRegionList, {
+      context, geography: context.geography, expanded: context.geography.markers.find((marker) => marker.label.startsWith('Lisbon'))!.id,
+    });
     const html = renderToString(createElement(Talks, {
-      talks: FIXTURE_TALKS, referenceDate: REFERENCE_DATE, locale: 'ar-EG', views: [globeView()], defaultView: 'globe',
+      talks: FIXTURE_TALKS, referenceDate: REFERENCE_DATE, locale: 'ar-EG', views: [{ id: 'places', label: 'Places', Component: OpenLisbon }], defaultView: 'places',
     }));
     const latest = yearFormat('ar-EG').format(utc('2029-11-02'));
     assert.notEqual(latest, '2029', 'precondition: ar-EG uses Arabic-Indic digits');

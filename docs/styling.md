@@ -144,7 +144,7 @@ The globe view reads `--wanderer-globe-land`, `--wanderer-globe-marker`, `--wand
 
 The immersive presentation puts the whole shell in a native fullscreen `<dialog>`, including search, filters, view buttons and the exit control. Background content is inert, focus stays inside, and the shell scrolls when necessary. The stage is capped at `60vh` on desktop and `44vh` on smaller screens. The accessible location list follows the globe in reading and focus order; on wide layouts it is shown in the first column beside the globe. Without another inline view to exit to, the shell stays inline.
 
-Milestones have bounded thumbnails. Milestone ids must be unique: a repeated id keeps its first milestone and the rest are ignored. When space allows, the callout sits beside the globe; otherwise it sits below in document flow. Custom callout content is constrained to a scrollable 20rem height. A select exposes every milestone, selecting one pauses automatic motion, and dismissing one keeps it dismissed until animation is resumed. Reduced motion disables automatic callouts but preserves manual selection.
+Milestones have bounded thumbnails. Milestone ids must be unique: a repeated id keeps its first milestone and the rest are ignored. When space allows, the callout sits beside the globe; otherwise it sits below in document flow. Custom callout content is constrained to a scrollable 20rem height. A select exposes every milestone; choosing one pauses automatic motion and is announced politely (the select also points at the card with `aria-controls`), while choosing the placeholder only clears the selection. Keyboard focus inside a card pauses automatic motion, so a timed callout never disappears under focus, and Dismiss moves focus to the select. Dismissing a card keeps it dismissed until animation is resumed. Reduced motion disables automatic callouts but preserves manual selection. The location panel renders the talks of the open location only, and the drag hint is shown only while the globe can be drawn.
 
 ## Class naming
 
@@ -268,6 +268,7 @@ Inside the component:
 | `data-wanderer-active` | `.wanderer-globe__connector`, `.wanderer-globe__milestone-dot` | `true` for the active milestone |
 | `data-wanderer-milestone` | `.wanderer-globe__milestone-dot` | milestone id |
 | `data-wanderer-tooltip-position` | `.wanderer-globe__tooltip` | `above` when flipped above the marker, otherwise `below` (always present) |
+| `data-wanderer-announcement` | polite live regions | `results` (the debounced result count) or `milestone` (a milestone chosen in the select) |
 | `data-wanderer-expanded` | `.wanderer-globe__location` | `true` when its panel is open |
 | `data-wanderer-milestone` | `.wanderer-globe__callout` | active milestone id |
 

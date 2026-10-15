@@ -18,10 +18,10 @@ Every option of `<Talks>` from `@wanderer/talks`. Types come from `TalksProps` i
 | Prop | Type | Default | Behavior |
 |---|---|---|---|
 | `plugins` | `readonly TalksPlugin[]` | `[]` | Registered per instance. See [plugins.md](plugins.md). |
-| `views` | `readonly ViewContribution[]` | `[]` | Extra views beside the built-in list, for example `globeView()`. A view with id `list` replaces the built-in list. A view here may replace the built-in `list` by reusing its id; any other repeated id throws `Duplicate or reserved plugin/contribution ID`, like a plugin's would. |
+| `views` | `readonly ViewContribution[]` | `[]` | Extra views beside the built-in list, for example `globeView()`. A view with id `list` replaces the built-in list. A view here may replace the built-in `list` by reusing its id; any other repeated id throws `Duplicate or reserved plugin/contribution ID`, like a plugin's would. `globeView()` returns the same component for equal options, so an inline `views={[globeView()]}` keeps the mounted globe across parent renders. |
 | `enabledViews` | `readonly string[]` | `undefined` (all) | Keeps only the listed view ids. Registry order is preserved. Unknown ids are ignored, but a list that matches no registered view throws `enabledViews matches no registered view` during render. |
 | `slots` | `TalksSlots` | `undefined` | `SearchInput`, `GlobeOverlayCard`, `GlobeAside`, `GlobeStageOverlay`. Slots from props win over plugin slots. See [plugins.md](plugins.md#slots). |
-| `milestones` | `readonly Milestone[]` | `[]` | Callouts on the globe. A milestone anchors at `coordinates`, or at the coordinates of the talk named by `talkId`. Milestones that resolve no coordinates are dropped. |
+| `milestones` | `readonly Milestone[]` | `[]` | Callouts on the globe. A milestone anchors at `coordinates` when they are a finite latitude and longitude in range, otherwise at the coordinates of the talk named by `talkId`. Milestones that resolve no coordinates are dropped, and a repeated id keeps its first milestone. |
 | `ImageComponent` | `ComponentType<ImageComponentProps>` | a plain `<img loading="lazy" decoding="async">` | Renders milestone images. Pass `next/image` or similar. |
 | `navigation` | `NavigationOptions` | `{}` | `LinkComponent`, `linkComponentKinds`, `onNavigate`, `policies`, `primaryLink`. See [links.md](links.md). |
 | `geography` | `GeographyOptions` | `undefined` | `resolveCoordinates`, `mergeDistanceKm` (64), `assignRegion`, `unassignedRegion`. Inside the component `unassignedRegion` defaults to `copy.unassignedRegion` (`"Other"`); the bare helper defaults to `"Unassigned"`. Geography is derived from the filtered talks, so search and filters change the globe. Markers are merged once from all talks, so a location keeps its marker id, coordinates and label while search and filters narrow its talks. A marker is labeled by its host (lowest id) talk's location, or by the first merged talk with a location when the host has none. |
@@ -237,8 +237,9 @@ Every string and label other than formatted dates is a key of `TalksCopy`. Pass 
 | `locations` | `Locations` |
 | `unassignedRegion` | `Other` |
 | `unknownLocation` | `Unknown location` |
-| `globeLabel` | `Interactive globe of talk locations` |
-| `globeHint` | `Drag to rotate. Hover a marker for details.` |
+| `globeLabel` | `Interactive globe of talk locations` (names the globe stage) |
+| `globePanelLabel` | `Talk locations` (names the region and location panel) |
+| `globeHint` | `Drag to rotate. Hover a marker for details.` (shown only while the globe can be drawn) |
 | `milestones` | `Milestones` |
 | `chooseMilestone` | `Choose a milestone` |
 | `pauseGlobe` | `Pause animation` |
@@ -267,6 +268,7 @@ Function keys receive numbers or raw strings, never preformatted text:
 | `locationCount` | `(count) => string` | `3 talks` / `1 talk` |
 | `regionPercentage` | `(percentage) => string` | `42.9%` (one decimal) |
 | `actionLabel` | `(action, title) => string` | `Watch recording: Talk title` |
+| `milestoneShown` | `(title) => string` | `Milestone: Title`, announced when the visitor picks a milestone in the select |
 
 `undated` doubles as the formatted value for a talk without a valid date. `undatedMonth` fills the card margin where a dated talk shows its month abbreviation. `upcoming` is the group label; `upcomingBadge` is the badge on a card.
 

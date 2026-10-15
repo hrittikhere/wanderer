@@ -72,7 +72,10 @@ export interface TalksCopy {
   locations: string;
   unassignedRegion: string;
   unknownLocation: string;
+  /** Names the interactive globe stage. */
   globeLabel: string;
+  /** Names the panel with the region and location lists beside the globe. */
+  globePanelLabel: string;
   globeHint: string;
   milestones: string;
   chooseMilestone: string;
@@ -97,6 +100,8 @@ export interface TalksCopy {
   locationCount: (count: number) => string;
   regionPercentage: (percentage: number) => string;
   actionLabel: (action: string, title: string) => string;
+  /** Announced when the visitor picks a milestone in the select. */
+  milestoneShown: (title: string) => string;
 }
 
 /** Copy overrides. Keys left out, `undefined` or `null` keep the English default. */

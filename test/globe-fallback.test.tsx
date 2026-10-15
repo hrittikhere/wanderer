@@ -10,6 +10,7 @@ import { deriveGeography } from '../src/helpers.js';
 import { click, installDom, type DomHandle } from './support/dom.js';
 import { loadReactDomClient } from './support/react.js';
 import { FIXTURE_TALKS, REFERENCE_DATE } from './support/fixtures.js';
+import { spyOnRendererImport } from './support/import-hooks.js';
 
 const { createRoot, hydrateRoot } = await loadReactDomClient();
 
@@ -85,13 +86,16 @@ describe('GlobeView fallback without WebGL', () => {
     assert.equal(section.getAttribute('data-wanderer-view'), 'list');
   });
 
-  test('preloadGlobeView in a browser-like environment returns the shared promise', async () => {
+  test('preloadGlobeView in a browser-like environment shares one renderer import', async () => {
     const dom = webglLessDom(1440);
-    cleanups.push(async () => { dom.cleanup(); });
+    const spy = spyOnRendererImport();
+    cleanups.push(async () => { spy.restore(); dom.cleanup(); });
     const first = preloadGlobeView();
     assert.ok(first instanceof Promise);
     // The renderer module imports cobe, which needs a real WebGL canvas only when mounted; loading is fine here.
-    await first;
+    await Promise.all([first, preloadGlobeView()]);
+    await preloadGlobeView();
+    assert.ok(spy.imports <= 1, `every call shares the memoized import (saw ${spy.imports})`);
   });
 });
 
