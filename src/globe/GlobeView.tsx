@@ -154,6 +154,41 @@ function useCalloutPlacement(stageRef: RefObject<HTMLElement | null>, direction:
   return beside === undefined ? undefined : beside ? 'beside' : 'below';
 }
 
+/** Matches the stylesheet's beside placement; used until the card has been measured. */
+const DEFAULT_CALLOUT_ANCHOR = { x: '104%', y: '42%' };
+/** How far below the card's top edge the connector meets it. */
+const CONNECTOR_CARD_OFFSET_PX = 24;
+
+/**
+ * Where connectors meet the milestone card beside the stage, in stage pixels.
+ * The dismiss button sits above the card, so the callout's own corner is not
+ * on the card. Offsets ignore the slide-in transform, so the anchor is the
+ * card's resting position.
+ */
+function useCalloutAnchor(calloutRef: RefObject<HTMLDivElement | null>, beside: boolean, milestoneId: string | undefined, direction: 'ltr' | 'rtl'): { x: string; y: string } {
+  const [anchor, setAnchor] = useState(DEFAULT_CALLOUT_ANCHOR);
+  useEffect(() => {
+    const callout = calloutRef.current;
+    if (!beside || !milestoneId || !callout) return;
+    const dismiss = callout.querySelector('.wanderer-globe__dismiss');
+    const card = dismiss?.nextElementSibling;
+    if (!(card instanceof HTMLElement)) return;
+    const measure = () => {
+      if (card.offsetWidth === 0) return;
+      const x = callout.offsetLeft + card.offsetLeft + (direction === 'rtl' ? card.offsetWidth : 0);
+      const y = callout.offsetTop + card.offsetTop + Math.min(CONNECTOR_CARD_OFFSET_PX, card.offsetHeight / 2);
+      setAnchor((current) => (current.x === `${x}px` && current.y === `${y}px` ? current : { x: `${x}px`, y: `${y}px` }));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(callout);
+    if (callout.parentElement) observer.observe(callout.parentElement);
+    return () => observer.disconnect();
+  }, [calloutRef, beside, milestoneId, direction]);
+  return anchor;
+}
+
 /** Talk ids are free-form strings; element ids and IDREF lists must not contain whitespace. */
 function toDomId(id: string): string {
   return encodeURIComponent(id);
@@ -449,6 +484,8 @@ export function GlobeView({ context, active, options = NO_OPTIONS, presentation:
   // The renderer is the only thing that activates milestones; when it is gone
   // (no mapped talks, an error) the callout must go with it.
   const rendererShown = isClient && hasMarkers && status === 'ready' && Renderer !== null;
+  const calloutRef = useRef<HTMLDivElement>(null);
+  const calloutAnchor = useCalloutAnchor(calloutRef, calloutPlacement === 'beside' && rendererShown, activeMilestone?.id, context.direction);
   useEffect(() => {
     if (rendererShown) return;
     setActiveMilestoneId(null);
@@ -479,7 +516,7 @@ export function GlobeView({ context, active, options = NO_OPTIONS, presentation:
           autoRotate={automatic && (options.autoRotate ?? true)}
           autoMilestones={automatic}
           showConnectors={calloutPlacement === 'beside'}
-          calloutAnchor={{ x: '104%', y: '42%' }}
+          calloutAnchor={calloutAnchor}
           copy={copy}
           locale={context.locale}
           direction={context.direction}
@@ -503,6 +540,7 @@ export function GlobeView({ context, active, options = NO_OPTIONS, presentation:
 
   const callout = activeMilestone && rendererShown ? (
     <div
+      ref={calloutRef}
       id={calloutId}
       className="wanderer-globe__callout"
       data-wanderer-milestone={activeMilestone.id}

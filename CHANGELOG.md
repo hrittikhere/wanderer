@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Milestone connectors beside the globe now end at the card. The connector SVG kept its intrinsic 300x150 size, so the line pointed away from the callout; it now fills the stage, and the anchor is measured from the card below the dismiss button (mirrored in RTL).
 - Replacing a sparse talks array with populated data now recomputes validation and results; empty slots no longer make shallow comparison retain stale input.
 - Reject empty slots in plugin and contribution arrays with the same diagnostic as explicit `undefined` entries, including contributions that flattening previously discarded.
 - Constrain cobe to the compatible 0.6.5 API and align Node engines, portable test discovery and CI.

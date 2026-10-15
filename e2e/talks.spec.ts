@@ -1,5 +1,12 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+
+// Controls transition their colors, so axe can sample a pressed button midway
+// between its light and dark states. Let CSS transitions finish first.
+async function axeViolations(page: Page) {
+  await page.evaluate(() => Promise.all(document.getAnimations().filter((animation) => animation instanceof CSSTransition).map((animation) => animation.finished.catch(() => undefined))));
+  return (await new AxeBuilder({ page }).analyze()).violations;
+}
 
 test('the real WebGL shader has finite uniforms and draws a visible globe', async ({ page }) => {
   await page.goto('/?presentation=immersive');
@@ -79,6 +86,35 @@ for (const width of [390, 768, 1366, 1920]) {
   });
 }
 
+for (const dir of ['ltr', 'rtl']) {
+  test(`a milestone connector ends at the card beside the stage (${dir})`, async ({ page }) => {
+    // Wide enough that the fullscreen callout fits beside the stage, which draws connectors.
+    await page.setViewportSize({ width: 2000, height: 1100 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(`/?presentation=immersive&dir=${dir}`);
+    await page.getByRole('button', { name: 'Globe', exact: true }).click();
+    await expect(page.locator('.wanderer-globe')).toHaveAttribute('data-wanderer-globe-status', 'ready');
+    await page.getByRole('combobox', { name: 'Milestones', exact: true }).selectOption('first-stage');
+    const stage = page.locator('.wanderer-globe__stage');
+    await expect(stage).toHaveAttribute('data-wanderer-callout', 'beside');
+    const line = page.locator('.wanderer-globe__connector[data-wanderer-active="true"]');
+    await expect(line).toHaveCount(1);
+    const stageBox = (await stage.boundingBox())!;
+    const layerBox = (await page.locator('.wanderer-globe__connectors').boundingBox())!;
+    // The dismiss button sits above the card; the line meets the card, not the callout's corner.
+    const cardBox = (await page.locator('.wanderer-globe__callout .wanderer-milestone').boundingBox())!;
+    // An SVG left at its intrinsic 300x150 resolves the percentage anchor against the wrong box.
+    expect(Math.abs(layerBox.width - stageBox.width)).toBeLessThan(1);
+    expect(Math.abs(layerBox.height - stageBox.height)).toBeLessThan(1);
+    const end = await line.evaluate((element: SVGLineElement) => ({ x: element.x2.baseVal.value, y: element.y2.baseVal.value }));
+    // The card faces the globe with its inline-start edge: left in LTR, right in RTL.
+    const edge = dir === 'rtl' ? cardBox.x + cardBox.width : cardBox.x;
+    expect(Math.abs(layerBox.x + end.x - edge)).toBeLessThan(2);
+    expect(layerBox.y + end.y).toBeGreaterThan(cardBox.y);
+    expect(layerBox.y + end.y).toBeLessThan(cardBox.y + cardBox.height);
+  });
+}
+
 test('fullscreen keeps search, focus and exit inside the dialog', async ({ page }) => {
   await page.goto('/?presentation=immersive');
   await page.getByRole('button', { name: 'Globe', exact: true }).click();
@@ -122,11 +158,11 @@ test('without WebGL, locations and the return to list stay usable', async ({ pag
 for (const theme of ['light', 'dark']) {
   test(`list and fullscreen pass axe in ${theme} with RTL`, async ({ page }) => {
     await page.goto(`/?presentation=immersive&dir=rtl&theme=${theme}`);
-    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    expect(await axeViolations(page)).toEqual([]);
     await page.getByRole('button', { name: 'Globe', exact: true }).click();
     await expect(page.locator('.wanderer-globe')).toHaveAttribute('data-wanderer-globe-status', 'ready');
     await page.getByRole('combobox', { name: 'Milestones', exact: true }).selectOption('first-stage');
-    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    expect(await axeViolations(page)).toEqual([]);
   });
 }
 
@@ -138,7 +174,7 @@ test('?theme=system follows the OS preference in the component and the page arou
   const style = (selector: string, property: 'backgroundColor' | 'borderTopColor') => page.locator(selector).evaluate((element, name) => getComputedStyle(element)[name], property);
   expect(await style('body', 'backgroundColor')).toBe('rgb(11, 13, 18)');
   expect(await style('.wanderer', 'borderTopColor'), 'the frame uses the dark --wanderer-border').toBe('rgb(42, 42, 49)');
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  expect(await axeViolations(page)).toEqual([]);
 });
 
 test('switching views and searching never exhausts the per-page WebGL context limit', async ({ page }) => {
@@ -206,7 +242,7 @@ test('the inline globe with an open location and the no-WebGL fallback pass axe'
   await page.getByRole('button', { name: 'Globe', exact: true }).click();
   await expect(page.locator('.wanderer-globe')).toHaveAttribute('data-wanderer-globe-status', 'ready');
   await page.getByRole('button', { name: /Lisbon, Portugal/ }).click();
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  expect(await axeViolations(page)).toEqual([]);
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, kind: string, ...rest: unknown[]) {
@@ -217,5 +253,5 @@ test('the inline globe with an open location and the no-WebGL fallback pass axe'
   await page.reload();
   await page.getByRole('button', { name: 'Globe', exact: true }).click();
   await expect(page.getByText('The globe could not be shown', { exact: true })).toBeVisible();
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  expect(await axeViolations(page)).toEqual([]);
 });
