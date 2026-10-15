@@ -136,13 +136,13 @@ Gaps, paddings and margins throughout use these steps.
 | `--wanderer-globe-glow` | `#ffffff` | `#17171b` | Glow color passed to the renderer. |
 | `--wanderer-globe-connector` | `#1f5ed6` | `#7fb0ff` | Dashed connector lines from milestone dots to the callout (`.wanderer-globe__connectors`). |
 | `--wanderer-globe-max-size` | `44rem` | same | Maximum width of the square globe stage. |
-| `--wanderer-globe-reveal-duration` | `920ms` | same | Cross-fade from the intro sketch to the globe canvas. Override it on `.wanderer`, a theme selector or the `tokens` prop like any other token. |
+| `--wanderer-globe-reveal-duration` | `920ms` | same | Cross-fade from the intro sketch to the globe canvas. Override it on `.wanderer`, a theme selector or the `tokens` prop like any other token, in `ms` or `s`. The renderer reads it when the intro starts and removes the sketch only after the cross-fade has run for this long. |
 
 The globe view reads `--wanderer-globe-land`, `--wanderer-globe-marker`, `--wanderer-globe-bg` and `--wanderer-globe-glow` from the computed style of its stage element and converts them to 0 to 1 RGB for WebGL. Any CSS color syntax the browser can resolve works. The values are read on mount and again when `theme` or the color scheme changes, so overrides from consumer CSS and the `tokens` prop reach the renderer. The renderer falls back to built-in values when a token is empty.
 
 The immersive presentation puts the whole shell in a native fullscreen `<dialog>`, including search, filters, view buttons and the exit control. Background content is inert, focus stays inside, and the shell scrolls when necessary. The stage is capped at `60vh` on desktop and `44vh` on smaller screens. The accessible location list follows the globe on small screens. Without another inline view to exit to, the shell stays inline.
 
-Milestones have bounded thumbnails. When space allows, the callout sits beside the globe; otherwise it sits below in document flow. Custom callout content is constrained to a scrollable 20rem height. A select exposes every milestone, selecting one pauses automatic motion, and dismissing one keeps it dismissed until animation is resumed. Reduced motion disables automatic callouts but preserves manual selection.
+Milestones have bounded thumbnails. Milestone ids must be unique: a repeated id keeps its first milestone and the rest are ignored. When space allows, the callout sits beside the globe; otherwise it sits below in document flow. Custom callout content is constrained to a scrollable 20rem height. A select exposes every milestone, selecting one pauses automatic motion, and dismissing one keeps it dismissed until animation is resumed. Reduced motion disables automatic callouts but preserves manual selection.
 
 ## Class naming
 

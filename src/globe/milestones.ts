@@ -35,7 +35,8 @@ export function milestoneThresholds(latitude: number): MilestoneThresholds | nul
   const maxDepth = Math.cos((latitude * Math.PI) / 180 - THETA);
   if (!(maxDepth > MILESTONE_MIN_ATTAINABLE_DEPTH)) return null;
   const enter = Math.min(MILESTONE_ENTER_THRESHOLD, maxDepth * MILESTONE_ENTER_RATIO);
-  return { enter, exit: enter - (MILESTONE_ENTER_THRESHOLD - MILESTONE_EXIT_THRESHOLD) };
+  // Never below the limb: a dot past depth 0 is hidden, so its callout must count as slid away.
+  return { enter, exit: Math.max(0, enter - (MILESTONE_ENTER_THRESHOLD - MILESTONE_EXIT_THRESHOLD)) };
 }
 
 export interface MilestoneUpdate {
@@ -73,8 +74,10 @@ export class MilestoneTracker {
     return this.milestones.find((milestone) => milestone.id === id);
   }
 
-  /** Replaces the milestone set and drops any pending state for removed ids. */
+  /** Replaces the milestone set and drops any pending state for removed ids. Ids are keys: a repeated id keeps its first milestone. */
   setMilestones(milestones: readonly PositionedMilestone[]): void {
+    const seen = new Set<string>();
+    milestones = milestones.filter((milestone) => !seen.has(milestone.id) && !!seen.add(milestone.id));
     this.milestones = milestones;
     this.thresholds = new Map(milestones.map((milestone) => [milestone.id, milestoneThresholds(milestone.coordinates[0])]));
     const ids = new Set(milestones.map((milestone) => milestone.id));
@@ -117,7 +120,8 @@ export class MilestoneTracker {
       const exit = this.thresholds.get(this.activeId)?.exit ?? MILESTONE_EXIT_THRESHOLD;
       const shownFor = now - this.shownAt;
       const timedOut = shownFor >= this.dwellMs;
-      const slidAway = shownFor >= MILESTONE_MIN_DWELL_MS && depth < exit;
+      // Behind the limb the dot and connector are hidden, so the callout would point at nothing.
+      const slidAway = depth <= 0 || (shownFor >= MILESTONE_MIN_DWELL_MS && depth < exit);
       if (timedOut || slidAway) {
         change.dismissed = this.activeId;
         this.activeId = null;
@@ -125,11 +129,12 @@ export class MilestoneTracker {
       }
     }
 
-    if (this.activeId === null && this.queue.length > 0) {
+    while (this.activeId === null && this.queue.length > 0) {
       const id = this.queue.shift() as string;
       const milestone = this.find(id);
-      if (milestone) {
-        const depth = projectMarker(milestone.coordinates[0], milestone.coordinates[1], phi).sz;
+      const depth = milestone ? projectMarker(milestone.coordinates[0], milestone.coordinates[1], phi).sz : 0;
+      // A queued milestone that has already turned away waits for its next pass.
+      if (milestone && depth > 0) {
         const exit = this.thresholds.get(id)?.exit ?? MILESTONE_EXIT_THRESHOLD;
         const normalizedDepth = clamp((depth - exit) / (1 - exit), 0, 1);
         this.dwellMs = clamp(

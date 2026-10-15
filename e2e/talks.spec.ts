@@ -129,3 +129,29 @@ for (const theme of ['light', 'dark']) {
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   });
 }
+
+test('switching views and searching never exhausts the per-page WebGL context limit', async ({ page }) => {
+  test.setTimeout(120_000);
+  const problems: string[] = [];
+  page.on('console', (message) => { if (/too many active webgl contexts|context (?:was )?lost|CONTEXT_LOST/i.test(message.text())) problems.push(message.text()); });
+  page.on('pageerror', (error) => problems.push(error.message));
+  await page.goto('/');
+  const search = page.getByRole('searchbox', { name: 'Search talks' });
+  // Chrome keeps 16 live contexts per page and drops the oldest past that; each round mounts a renderer.
+  for (let round = 0; round < 20; round += 1) {
+    await page.getByRole('button', { name: 'Globe', exact: true }).click();
+    await expect(page.locator('.wanderer-globe')).toHaveAttribute('data-wanderer-globe-status', 'ready');
+    await expect(page.locator('canvas.wanderer-globe__canvas')).toBeVisible();
+    await search.fill(round % 2 ? 'platforms' : '');
+    await page.getByRole('button', { name: 'List', exact: true }).click();
+  }
+  await search.fill('');
+  await page.getByRole('button', { name: 'Globe', exact: true }).click();
+  const canvas = page.locator('canvas.wanderer-globe__canvas');
+  await expect(canvas).toBeVisible();
+  expect(await canvas.evaluate((element) => {
+    const gl = (element as HTMLCanvasElement).getContext('webgl2') ?? (element as HTMLCanvasElement).getContext('webgl');
+    return gl !== null && !gl.isContextLost();
+  })).toBe(true);
+  expect(problems).toEqual([]);
+});

@@ -82,26 +82,43 @@ describe('the WebGL renderer under a fake GL context', () => {
     assert.equal(item.globe.getAttribute('data-wanderer-globe-status'), 'ready');
     assert.ok(item.globe.querySelector('.wanderer-globe__canvas'), 'the cobe canvas is in the stage');
     assert.equal(item.gl.programs, 1, 'one globe created');
-    assert.equal(item.gl.released, 1, 'the support probe released its context');
+    assert.equal(item.gl.probeReleases, 1, 'the support probe released its context');
     // Emptying and refilling the mapped set unmounts and remounts the renderer without probing again.
     for (const query of ['zzzz-nothing', '', 'zzzz-nothing', '']) {
       await act(async () => { setInputValue(item.search, query, item.dom.window); });
     }
     assert.equal(item.globe.getAttribute('data-wanderer-globe-status'), 'ready');
-    assert.equal(item.gl.released, 1, 'the probe runs once per GlobeView instance');
+    assert.equal(item.gl.probeReleases, 1, 'the probe runs once per GlobeView instance');
+    assert.equal(item.gl.rendererReleases, 2, 'each unmounted renderer released its own context');
   });
 
-  test('search keystrokes that keep the marker set do not rebuild the globe; a changed set does', async () => {
+  test('search keystrokes never rebuild the globe; a changed marker set is handed to the live globe', async () => {
     const item = await mountGlobe();
-    assert.equal(item.gl.programs, 1);
+    const { gl } = item;
+    await item.frame();
+    assert.equal(gl.programs, 1);
+    assert.equal(gl.uniforms.get('C'), 6, 'cobe counts two vec4 slots per marker: three locations');
     for (const query of ['e', 'er', 'e', '']) {
       await act(async () => { setInputValue(item.search, query, item.dom.window); });
     }
     assert.equal(item.section.querySelectorAll('.wanderer-globe__location').length, 3, 'every location still mapped');
-    assert.equal(item.gl.programs, 1, 'same marker set: the globe survives every keystroke');
+    await item.frame();
+    assert.equal(gl.programs, 1, 'same marker set: the globe survives every keystroke');
     await act(async () => { setInputValue(item.search, 'aurora', item.dom.window); });
     assert.equal(item.section.querySelectorAll('.wanderer-globe__location').length, 1);
-    assert.equal(item.gl.programs, 2, 'a different marker set rebuilds the globe once');
+    // onRender hands the markers over; cobe uploads them on the following frame.
+    await item.frame();
+    await item.frame();
+    assert.equal(gl.programs, 1, 'a different marker set does not compile a new globe');
+    assert.equal(gl.uniforms.get('C'), 2, 'the live globe now draws one marker');
+    const slots = gl.uniforms.get('u') as number[];
+    const sizes = Array.from({ length: (gl.uniforms.get('C') as number) / 2 }, (_, index) => slots[index * 8 + 3]);
+    assert.deepEqual(sizes.map((size) => size > 0), [true], 'the drawn slot holds the real marker');
+    await act(async () => { setInputValue(item.search, '', item.dom.window); });
+    await item.frame();
+    await item.frame();
+    assert.equal(gl.uniforms.get('C'), 6, 'clearing the search restores every marker');
+    assert.equal(gl.programs, 1);
   });
 
   test('hiding and showing the tab repeatedly leaves exactly one render chain', async () => {
@@ -187,6 +204,14 @@ describe('the WebGL renderer under a fake GL context', () => {
     await act(async () => { setInputValue(item.search, '', item.dom.window); });
     assert.ok(item.globe.querySelector('.wanderer-globe__callout') === null, 'the remounted renderer starts without a callout');
     assert.equal(gl.programs, 2);
+  });
+
+  test('milestones that repeat an id render once, keeping the first', async () => {
+    const copy: Milestone = { ...LISBON, title: 'Copy-pasted milestone', coordinates: [52.52, 13.405] };
+    const item = await mountGlobe({ milestones: [LISBON, copy] });
+    const options = [...item.globe.querySelectorAll('select option')].map((option) => option.textContent);
+    assert.deepEqual(options, ['Choose a milestone', 'Lisbon milestone']);
+    assert.equal(item.globe.querySelectorAll('.wanderer-globe__milestone-dot').length, 1);
   });
 
   test('the callout sits beside the stage only when the column has room, and connectors follow', async () => {

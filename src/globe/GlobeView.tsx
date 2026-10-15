@@ -365,7 +365,11 @@ export function GlobeView({ context, active, options }: GlobeViewComponentProps)
 
   const positionedMilestones = useMemo<PositionedMilestone[]>(() => {
     const byId = new Map<string, Talk>(geography.mappedTalks.map((talk) => [talk.id, talk]));
+    // Milestone ids key the select options, dots and the tracker: a repeated id keeps its first milestone.
+    const seen = new Set<string>();
     return milestones.flatMap((milestone) => {
+      if (seen.has(milestone.id)) return [];
+      seen.add(milestone.id);
       const talk = milestone.talkId ? byId.get(milestone.talkId) : undefined;
       const coordinates = milestone.coordinates ?? (talk ? resolveTalkCoordinates(talk, context.geographyOptions) : undefined);
       return coordinates ? [{ ...milestone, coordinates }] : [];

@@ -14,6 +14,13 @@
 - Share one React context between the ESM and CommonJS copies, so `useTalks` works across the dual-package boundary.
 - Ship per-condition declarations (`dist/cjs/*.d.ts` for `require`), `typesVersions` for `node10` resolution, the `src` files the source maps reference, and `publishConfig.access: public`. The package-smoke check compiles a TypeScript 5.0 consumer under every resolution mode.
 - `engines` now states the runtime floor (Node 20 or later) instead of the test toolchain's range, which moved to `devEngines`.
+- The globe renderer keeps one WebGL globe per mount and updates its markers in place, removes cobe's window resize listener and releases its WebGL context on unmount, so searching and switching views no longer leak contexts.
+- The globe intro advances on rendered frames, so a globe mounted hidden or offscreen plays it later and lands on the busiest location; the sketch now honors `--wanderer-globe-reveal-duration`.
+- Idle rotation is time-based (the same speed at any refresh rate), the drawing buffer follows `devicePixelRatio` changes, and a second pointer no longer resets or ends a drag.
+- At most 64 markers are drawn (the busiest), matching cobe's limit; hover only finds drawn markers.
+- The hover tooltip can be dismissed with Escape, stays dismissed until the pointer leaves the marker, can be hovered, and is positioned by its rendered width.
+- Milestone callouts close as soon as their dot turns behind the globe; repeated milestone ids keep the first milestone.
+- `parseCssColor` rejects malformed channels instead of returning NaN and runs in linear time.
 
 All notable changes to `@wanderer/talks` are recorded here. The format follows Keep a Changelog, and the project follows Semantic Versioning.
 

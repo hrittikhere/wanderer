@@ -14,6 +14,22 @@ describe('parseCssColor', () => {
     assert.deepEqual(parseCssColor('rgba(0, 0, 0, 0)'), [0, 0, 0, 0]);
   });
 
+  test('rejects malformed channels instead of returning NaN', () => {
+    assert.equal(parseCssColor('rgb(., ., .)'), null);
+    assert.equal(parseCssColor('rgb(1.2.3, 0, 0)'), null);
+    assert.equal(parseCssColor('rgb(1, 2)'), null);
+    assert.equal(parseCssColor('rgb(1, 2, 3, 4, 5)'), null);
+    assert.equal(parseCssColor('rgba(1, 2, 3, .)'), null);
+  });
+
+  test('runs in linear time on long whitespace runs', () => {
+    const spaces = ' '.repeat(1500);
+    const started = performance.now();
+    assert.equal(parseCssColor(`rgb(1${spaces}2${spaces}x`), null);
+    assert.deepEqual(parseCssColor(`rgb(1${spaces}2${spaces}3)`), [1 / 255, 2 / 255, 3 / 255, 1]);
+    assert.ok(performance.now() - started < 200, 'no polynomial backtracking');
+  });
+
   test('returns null for other color spaces so they go through the canvas path', () => {
     assert.equal(parseCssColor('oklch(0.7 0.2 30)'), null);
     assert.equal(parseCssColor('color(srgb 1 0 0)'), null);
