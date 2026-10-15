@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Talks, definePlugin, type Theme } from '@wanderer/talks';
 import { globeView } from '@wanderer/talks/globe';
@@ -10,11 +10,14 @@ const workshops = definePlugin({ id: 'workshops', filters: [{ id: 'workshop', la
 const plugins = [workshops];
 const responsive = { small: 'list', large: 'globe' };
 const parameters = new URLSearchParams(window.location.search);
+const themes: readonly Theme[] = ['light', 'dark', 'system'];
 
 function App() {
   const [presentation, setPresentation] = useState<'inline' | 'immersive'>(parameters.get('presentation') === 'immersive' ? 'immersive' : 'inline');
-  const [theme, setTheme] = useState<Theme>(parameters.get('theme') === 'dark' ? 'dark' : 'light');
+  const [theme, setTheme] = useState<Theme>(themes.find((value) => value === parameters.get('theme')) ?? 'light');
   const views = useMemo(() => [globeView({ presentation, intro: false })], [presentation]);
+  // The page around the component follows the same appearance (page.css uses light-dark()).
+  useEffect(() => { document.documentElement.style.colorScheme = theme === 'system' ? 'light dark' : theme; }, [theme]);
   return (
     <main>
       <header className="page-header">

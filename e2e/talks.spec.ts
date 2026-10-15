@@ -130,6 +130,17 @@ for (const theme of ['light', 'dark']) {
   });
 }
 
+test('?theme=system follows the OS preference in the component and the page around it', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/?theme=system');
+  await expect(page.getByRole('combobox', { name: 'Appearance' })).toHaveValue('system');
+  await expect(page.locator('.wanderer')).toHaveAttribute('data-wanderer-theme', 'system');
+  const style = (selector: string, property: 'backgroundColor' | 'borderTopColor') => page.locator(selector).evaluate((element, name) => getComputedStyle(element)[name], property);
+  expect(await style('body', 'backgroundColor')).toBe('rgb(11, 13, 18)');
+  expect(await style('.wanderer', 'borderTopColor'), 'the frame uses the dark --wanderer-border').toBe('rgb(42, 42, 49)');
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});
+
 test('switching views and searching never exhausts the per-page WebGL context limit', async ({ page }) => {
   test.setTimeout(120_000);
   const problems: string[] = [];

@@ -2,25 +2,29 @@
 // React version, then runs an SSR + hydration + interaction check in each.
 // Needs network access for `npm install`. Not part of `npm test` for that reason.
 //
-//   node scripts/react-compat.mjs            # React 18.3.1 and the installed 19.x
+//   node scripts/react-compat.mjs            # React 18.2.0 (the peer floor), 18.3.1 and the installed 19.x
 //   WANDERER_COMPAT_DIR=/some/dir node scripts/react-compat.mjs
 //   WANDERER_REACT_VERSIONS=18.3.1,19.2.0 node scripts/react-compat.mjs
+//
+// The projects go in a fresh private temp directory that is removed after a
+// passing run, unless WANDERER_COMPAT_DIR names a directory to use instead.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnNpm } from './consumer-utils.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
-const scratchDir = process.env.WANDERER_COMPAT_DIR ?? path.join(os.tmpdir(), 'wanderer-compat');
+const scratchDir = process.env.WANDERER_COMPAT_DIR ?? mkdtempSync(path.join(os.tmpdir(), 'wanderer-compat-'));
 const installedReact = require('react/package.json').version;
 const installedJsdom = require('jsdom/package.json').version;
-const versions = (process.env.WANDERER_REACT_VERSIONS ?? `18.3.1,${installedReact}`).split(',').map((item) => item.trim()).filter(Boolean);
+const versions = (process.env.WANDERER_REACT_VERSIONS ?? `18.2.0,18.3.1,${installedReact}`).split(',').map((item) => item.trim()).filter(Boolean);
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, { encoding: 'utf8', ...options });
+  const result = command === 'npm' ? spawnNpm(args, { encoding: 'utf8', ...options }) : spawnSync(command, args, { encoding: 'utf8', ...options });
   if (result.error) throw result.error;
   return result;
 }
@@ -190,14 +194,16 @@ for (const version of versions) {
   }, null, 2)}\n`);
   writeFileSync(path.join(projectDir, 'check.mjs'), checkScript);
   console.error(`react ${version}: npm install in ${projectDir}`);
-  const install = run('npm', ['install', '--no-audit', '--no-fund', '--silent'], { cwd: projectDir });
+  // --loglevel=error rather than --silent, so a failed install says why.
+  const install = run('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error'], { cwd: projectDir });
   if (install.status !== 0) {
     results.push({ version, ok: false, stage: 'install', stderr: install.stderr.slice(-2000) });
     console.log(JSON.stringify(results.at(-1)));
     continue;
   }
   const installedReactVersion = JSON.parse(readFileSync(path.join(projectDir, 'node_modules', 'react', 'package.json'), 'utf8')).version;
-  const check = run(process.execPath, ['check.mjs'], { cwd: projectDir });
+  // The check needs React's development build (act, hydration warnings) whatever the caller's NODE_ENV.
+  const check = run(process.execPath, ['check.mjs'], { cwd: projectDir, env: { ...process.env, NODE_ENV: 'development' } });
   let summary;
   try { summary = JSON.parse(check.stdout); } catch { summary = null; }
   const entry = { version: installedReactVersion, requested: version, ok: check.status === 0 && summary?.ok === true, stage: 'check', summary, stderr: check.status === 0 ? undefined : check.stderr.slice(-4000) };
@@ -206,5 +212,6 @@ for (const version of versions) {
 }
 
 const allOk = results.every((entry) => entry.ok);
-console.error(allOk ? `react compat: ${results.map((entry) => entry.version).join(', ')} ok` : 'react compat: FAILED');
+console.error(allOk ? `react compat: ${results.map((entry) => entry.version).join(', ')} ok` : `react compat: FAILED (projects kept in ${scratchDir})`);
+if (allOk && !process.env.WANDERER_COMPAT_DIR) rmSync(scratchDir, { recursive: true, force: true });
 process.exit(allOk ? 0 : 1);

@@ -122,7 +122,7 @@ Without `responsive`, `defaultView` (or the first view) renders in one shell fro
 
 In a client-only app, compute the date once at startup: `new Date().toISOString().slice(0, 10)`.
 
-In Next.js with Cache Components, reading the clock during prerender is a build error. Compute it in a cached scope and pass it down:
+In Next.js with Cache Components (`cacheComponents: true` in `next.config.ts`, which `'use cache'` requires), reading the clock during prerender is a build error. Compute it in a cached scope and pass it down:
 
 ```tsx
 import { cacheLife } from 'next/cache';

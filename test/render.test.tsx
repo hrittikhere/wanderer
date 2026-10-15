@@ -139,8 +139,7 @@ describe('renderToString markup', () => {
 
   test('duplicate ids never produce React key warnings and only the first entry renders', () => {
     const talks = [talk({ id: 'same', title: 'First' }), talk({ id: 'same', title: 'Second' }), talk({ id: 'same', title: 'Third' })];
-    const validations: unknown[] = [];
-    const html = renderToString(createElement(Talks, { talks, referenceDate: REFERENCE_DATE, onValidation: (result) => validations.push(result) }));
+    const html = renderToString(createElement(Talks, { talks, referenceDate: REFERENCE_DATE }));
     assert.ok(html.includes('First'));
     assert.equal(html.includes('Second'), false);
     assert.equal(html.includes('Third'), false);

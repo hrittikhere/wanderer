@@ -59,7 +59,8 @@ describe('markerSetKey', () => {
     assert.notEqual(markerSetKey(base), markerSetKey([marker('a', [1, 2.5], 1), base[1]]));
     assert.notEqual(markerSetKey(base), markerSetKey([base[0], marker('b', [3, 4], 10)]), 'count crossing a size step changes the key');
     assert.equal(markerSetKey(base), markerSetKey([base[0], marker('b', [3, 4], 5)]), 'count within one size step keeps the key');
-    assert.equal(markerSize(1), markerSize(1));
-    assert.ok(markerSize(2) > markerSize(1) && markerSize(10) > markerSize(2));
+    assert.ok(markerSize(1) < markerSize(2) && markerSize(2) < markerSize(10), 'one, two and ten talks start the three size steps');
+    assert.equal(markerSize(9), markerSize(2), 'two to nine talks share a step');
+    assert.equal(markerSize(250), markerSize(10), 'ten or more share the largest');
   });
 });

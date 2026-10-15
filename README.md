@@ -40,7 +40,7 @@ The renderer uses the cobe 0.6 API. cobe 2 is not compatible. The peer is option
 | `react-dom` | `^18.2.0 \|\| ^19.0.0` | yes |
 | `cobe` | `^0.6.5` | yes when importing the globe; otherwise no |
 
-The published code runs on Node 20 or later (server rendering, build tools and data scripts); CI server-renders the built package on the first release of Node 20, 22 and 24. Developing the package needs Node 22 (22.22.2 or later), Node 24 (24.15.0 or later) or Node 26 and later for the test toolchain (odd releases such as 23 and 25 are outside the range) (`devEngines` in `package.json`); `.nvmrc` selects Node 24. The package ships ESM and CommonJS builds, TypeScript declarations for each (TypeScript 5.0 or later; `moduleResolution` `bundler`, `node16`, `nodenext` and `node10` all resolve every entry) and one plain CSS file.
+The published code runs on Node 20 or later (server rendering, build tools and data scripts); CI server-renders the built package on the first release of Node 20, 22 and 24, and runs the full suite on Node 22, 24 and 26. Developing the package needs Node 22 (22.22.2 or later), Node 24 (24.15.0 or later) or Node 26 and later for the test toolchain (odd releases such as 23 and 25 are outside the range) (`devEngines` in `package.json`); `.nvmrc` selects Node 24. The package ships ESM and CommonJS builds, TypeScript declarations for each (TypeScript 5.0 or later; `moduleResolution` `bundler`, `node16`, `nodenext` and `node10` all resolve every entry) and one plain CSS file.
 
 ## Minimal setup
 
@@ -132,6 +132,7 @@ import { TALKS } from './talks-data';
 
 // Under Cache Components, reading the clock during prerender is an error.
 // A cached scope pins the snapshot and revalidates it on the cache profile.
+// 'use cache' needs cacheComponents: true in next.config (Next.js 16).
 async function getReferenceDate(): Promise<string> {
   'use cache';
   cacheLife('hours');
@@ -145,6 +146,8 @@ export default async function TalksPage() {
   return <TalksClient talks={result.talks} referenceDate={referenceDate} />;
 }
 ```
+
+`'use cache'` and `cacheLife` are Cache Components features: enable them with `cacheComponents: true` in `next.config.ts`, as [examples/next](https://github.com/hrittikhere/wanderer/tree/main/examples/next) does. Without the flag, pass a date your app already computes per request or per build instead.
 
 ```tsx
 // app/talks/talks-client.tsx (Client Component)
@@ -238,7 +241,7 @@ export function App() {
 
 ## Compatibility
 
-- React 18.2 and later, and React 19, per the peer range. The automated compatibility script (`scripts/react-compat.mjs` in the repository, not in the published package) packs the package, installs it into an isolated project per React version and runs a server render, hydration and interaction check. It exercises React 18.3.1 and the installed React 19 version. The packed list consumer also builds with React 18.2.0.
+- React 18.2 and later, and React 19, per the peer range. The automated compatibility script (`scripts/react-compat.mjs` in the repository, not in the published package) packs the package, installs it into an isolated project per React version and runs a server render, hydration and interaction check. It exercises React 18.2.0 (the floor of the peer range), 18.3.1 and the installed React 19 version, with the default and a custom breakpoint, a dark OS and a plugin renderer.
 - Vite and Next.js App Router production builds are verified using isolated tarball installs, including RSC boundaries and CSS exports. See [examples](https://github.com/hrittikhere/wanderer/blob/main/examples/README.md).
 - Browser verification is performed in Chromium via Playwright. Other browsers are not part of the automated run.
 - The globe needs WebGL (WebGL2, WebGL or `experimental-webgl`). Without it the view shows a fallback with a button back to the list.

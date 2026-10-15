@@ -240,9 +240,9 @@ describe('plugins through <Talks>', () => {
   });
 
   test('a plugin that registers the reserved view id "list" throws', async () => {
-    const errors: unknown[] = [];
+    // Only silences React's report of the thrown error; the rejection is the assertion.
     const originalError = console.error;
-    console.error = (...args: unknown[]) => { errors.push(args); };
+    console.error = () => {};
     try {
       const plugin = definePlugin({ id: 'rogue', views: [{ id: 'list', label: 'Mine', Component: () => null }] });
       await assert.rejects(render({ plugins: [plugin] }), /Duplicate or reserved plugin\/contribution ID: list/);

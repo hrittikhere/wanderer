@@ -1,18 +1,22 @@
 // Test the actual tarball in isolated consumer projects, without workspace
 // symlinks masking missing exports, runtime dependencies or RSC directives.
-import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+// The fixtures (complete Next.js and Vite installs) are removed after a
+// passing run; a failing run, or WANDERER_KEEP_FIXTURES=1, keeps them.
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
+import { skipInstallsAndBuilds, spawnNpm } from './consumer-utils.mjs';
 import { build } from 'esbuild';
 import { gzipSync } from 'node:zlib';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const destination = await mkdtemp(path.join(tmpdir(), 'wanderer-package-'));
+process.on('exit', (code) => { if (code !== 0) console.error(`Fixtures kept for inspection: ${destination}`); });
 function run(args, cwd = root, capture = false) {
-  const result = spawnSync('npm', args, { cwd, encoding: 'utf8', stdio: capture ? 'pipe' : 'inherit', env: { ...process.env, NEXT_TELEMETRY_DISABLED: '1' } });
+  const result = spawnNpm(args, { cwd, encoding: 'utf8', stdio: capture ? 'pipe' : 'inherit', env: { ...process.env, NEXT_TELEMETRY_DISABLED: '1' } });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`npm ${args.join(' ')} failed\n${result.stderr ?? ''}`);
   return result.stdout;
@@ -23,7 +27,8 @@ const tarball = path.join(destination, filename);
 
 for (const name of ['vite', 'next']) {
   const dir = path.join(destination, name);
-  await cp(path.join(root, 'examples', name), dir, { recursive: true, filter: (source) => !/(?:^|[/\\])(?:node_modules|dist|\.next)(?:[/\\]|$)/.test(source) });
+  const from = path.join(root, 'examples', name);
+  await cp(from, dir, { recursive: true, filter: skipInstallsAndBuilds(from) });
   const manifestPath = path.join(dir, 'package.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   manifest.dependencies['@wanderer/talks'] = `file:${tarball}`;
@@ -34,10 +39,9 @@ for (const name of ['vite', 'next']) {
 }
 
 const listDir = path.join(destination, 'list-only');
-await cp(path.join(root, 'examples/vite'), listDir, { recursive: true, filter: (source) => !/(?:^|[/\\])(?:node_modules|dist)(?:[/\\]|$)/.test(source) });
+await cp(path.join(root, 'examples/vite'), listDir, { recursive: true, filter: skipInstallsAndBuilds(path.join(root, 'examples/vite')) });
 await writeFile(path.join(listDir, 'package.json'), JSON.stringify({ private: true, type: 'module', dependencies: { '@wanderer/talks': `file:${tarball}`, react: '18.2.0', 'react-dom': '18.2.0' } }));
 // The copied lock contains globe dependencies; install a genuinely fresh list consumer.
-const { rm } = await import('node:fs/promises');
 await rm(path.join(listDir, 'package-lock.json'), { force: true });
 run(['install', '--omit=optional', '--no-audit', '--no-fund'], listDir);
 const result = await build({ stdin: { contents: 'export { Talks } from "@wanderer/talks";', resolveDir: listDir }, bundle: true, format: 'esm', platform: 'browser', minify: true, write: false, metafile: true, external: ['react', 'react-dom', 'react/jsx-runtime'] });
@@ -88,4 +92,6 @@ export const exact: TalksProps = { talks: [], view: maybe, search: maybe, filter
 `);
 const exact = spawnSync(process.execPath, [tsc, '--noEmit', '--strict', '--exactOptionalPropertyTypes', '--skipLibCheck', 'false', '--jsx', 'react-jsx', '--types', 'react', '--target', 'es2020', '--module', 'esnext', '--moduleResolution', 'bundler', 'exact.ts'], { cwd: typesDir, encoding: 'utf8' });
 assert.equal(exact.status, 0, `exactOptionalPropertyTypes consumer failed:\n${exact.stdout}${exact.stderr}`);
-console.log(`Packed declarations passed under node10, node16 (CommonJS and ESM) and bundler resolution, and with exactOptionalPropertyTypes. Fixtures: ${destination}`);
+console.log('Packed declarations passed under node10, node16 (CommonJS and ESM) and bundler resolution, and with exactOptionalPropertyTypes.');
+if (process.env.WANDERER_KEEP_FIXTURES === '1') console.log(`Fixtures: ${destination}`);
+else await rm(destination, { recursive: true, force: true });

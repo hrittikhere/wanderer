@@ -51,7 +51,7 @@ The Server Component imports `validateTalks` and the other helpers from `@wander
 The library never calls `Date.now()`. Supply `referenceDate` as `YYYY-MM-DD`:
 
 - Client-only apps: compute it once at startup.
-- Next.js with Cache Components: compute it inside a `'use cache'` function with `cacheLife('hours')` and pass the string down. The value is pinned when the cache entry fills and refreshes on revalidation, so upcoming and past are consistent between the HTML and the client without hydration mismatches.
+- Next.js with Cache Components (`cacheComponents: true` in `next.config.ts`; `'use cache'` does not compile without it): compute it inside a `'use cache'` function with `cacheLife('hours')` and pass the string down. The value is pinned when the cache entry fills and refreshes on revalidation, so upcoming and past are consistent between the HTML and the client without hydration mismatches.
 - Static exports: the build-time value is used until the next build. If that is too stale, keep `referenceDate` out of the server render and set it in an effect on the client; talks then render as past first and reflow to upcoming after mount.
 
 ## Lazy globe loading
