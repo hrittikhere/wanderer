@@ -1,6 +1,7 @@
 'use client';
 
 import type { TalksContext } from '../component-types.js';
+import { ErrorBoundary } from './ErrorBoundary.js';
 import { CloseIcon, SearchIcon } from './icons.js';
 
 /** Preloading is speculative. A later view mount owns error reporting and retry. */
@@ -8,17 +9,27 @@ function preload(preloadView?: () => Promise<unknown>): void {
   if (preloadView) void Promise.resolve().then(preloadView).catch(() => {});
 }
 
-interface ToolbarProps {
+export interface ToolbarProps {
   context: TalksContext;
   /** The view this toolbar belongs to; differs per shell before hydration measures the viewport. */
   activeView: string | undefined;
+  /**
+   * Suffix for the search field's id (`${context.instanceId}-${shellKey}-search`),
+   * unique per toolbar. `Talks` uses `active`, or `small` and `large` for the
+   * two shells it renders before hydration; a second toolbar needs another key.
+   */
   shellKey: string;
+  /** The search text as typed. Defaults to `context.search`, which can trail the field by a render. */
+  search?: string;
+  /** The filter ids as toggled. Defaults to `context.filters`. */
+  filters?: readonly string[];
+  /** Whether search text or a filter is active, from the values above. Defaults to `context.hasActiveFilters`. */
+  hasActiveFilters?: boolean;
 }
 
-export function Toolbar({ context, activeView, shellKey }: ToolbarProps) {
+export function Toolbar({ context, activeView, shellKey, search = context.search, filters = context.filters, hasActiveFilters = context.hasActiveFilters }: ToolbarProps) {
   const {
-    copy, views, setView, search, setSearch, filters, toggleFilter, availableFilters,
-    hasActiveFilters, resetAll, talks, allTalks, slots,
+    copy, views, setView, setSearch, toggleFilter, availableFilters, resetAll, talks, allTalks, slots,
   } = context;
   const searchId = `${context.instanceId}-${shellKey}-search`;
   const SearchInput = slots.SearchInput;
@@ -28,15 +39,18 @@ export function Toolbar({ context, activeView, shellKey }: ToolbarProps) {
     <div className="wanderer-toolbar">
       <div className="wanderer-toolbar__search">
         {SearchInput ? (
-          <SearchInput
-            id={searchId}
-            value={search}
-            onChange={setSearch}
-            label={copy.searchLabel}
-            placeholder={copy.searchPlaceholder}
-            resultCount={talks.length}
-            context={context}
-          />
+          // A slot that throws loses only the field; the chips, count and views keep working.
+          <ErrorBoundary fallback={<p className="wanderer-error" role="alert">{copy.pluginError}</p>}>
+            <SearchInput
+              id={searchId}
+              value={search}
+              onChange={setSearch}
+              label={copy.searchLabel}
+              placeholder={copy.searchPlaceholder}
+              resultCount={talks.length}
+              context={context}
+            />
+          </ErrorBoundary>
         ) : (
           <div className="wanderer-search">
             <label htmlFor={searchId} className="wanderer-visually-hidden">{copy.searchLabel}</label>

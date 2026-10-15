@@ -12,12 +12,12 @@ Plugin-based React components and pure helpers for publishing a speaking history
 - Responsive view selection that renders on the server without hydration warnings.
 - Controlled or uncontrolled view, search and filters.
 - Theming through `--wanderer-*` custom properties: light, dark and system palettes, RTL, reduced motion and forced colors.
-- Every visible string and accessible label is replaceable through `copy`.
+- Every visible string and accessible label is replaceable through `copy`; dates, including year headings, follow `locale`.
 - Upcoming grouping uses the `referenceDate` you supply, never the current date. The globe uses an animation clock only.
 
 ## Installation
 
-The package is not published to npm yet. Try the [runnable examples](examples/README.md), or install a packed checkout:
+The package is not published to npm yet. Try the [runnable examples](https://github.com/hrittikhere/wanderer/blob/main/examples/README.md), or install a packed checkout:
 
 ```sh
 git clone https://github.com/hrittikhere/wanderer.git
@@ -40,7 +40,7 @@ The renderer uses the cobe 0.6 API. cobe 2 is not compatible. The peer is option
 | `react-dom` | `^18.2.0 \|\| ^19.0.0` | yes |
 | `cobe` | `^0.6.5` | yes when importing the globe; otherwise no |
 
-Use Node 22.22.2+, 24.15.0+, or 26+ (the exact engine range is in `package.json`). `.nvmrc` selects Node 24. The package ships ESM and CommonJS builds, TypeScript declarations and one plain CSS file.
+The published code runs on Node 20 or later (server rendering, build tools and data scripts); CI server-renders the built package on the first release of Node 20, 22 and 24, and runs the full suite on Node 22, 24 and 26. Developing the package needs Node 22 (22.22.2 or later), Node 24 (24.15.0 or later) or Node 26 and later for the test toolchain (odd releases such as 23 and 25 are outside the range) (`devEngines` in `package.json`); `.nvmrc` selects Node 24. The package ships ESM and CommonJS builds, TypeScript declarations for each (TypeScript 5.0 or later; `moduleResolution` `bundler`, `node16`, `nodenext` and `node10` all resolve every entry) and one plain CSS file.
 
 ## Minimal setup
 
@@ -75,9 +75,9 @@ export function Page() {
 | Entry | Exports |
 |---|---|
 | `@wanderer/talks` | `Talks`, `DEFAULT_BREAKPOINT`, `useTalks`, `createDefaultCopy`, `mergeCopy`, `definePlugin`, the list pieces (`ListView`, `listView`, `TalkGroupSection`, `EmptyState`, `TalkCard`, `Toolbar`, `Heading`, `TalkLinkAnchor`, `resolveLinkPolicy`, `ErrorBoundary`), the hooks (`useMediaQuery`, `useColorScheme`, `usePrefersReducedMotion`, `useIsClient`, `useControllable`), everything from `./helpers`, and every component type. |
-| `@wanderer/talks/helpers` | Pure functions, no `"use client"`: `validateTalks`, `filterTalks`, `groupTalks`, `sortTalks`, `parseCalendarDate`, `formatCalendarDate`, `isUpcoming`, `classifyTalkDate`, `talkYear`, `normalizeSearch`, `safeUrl`, `getTalkLinks`, `getPrimaryLink`, `DEFAULT_PRIMARY_LINK_PRECEDENCE`, `locationLabel`, `locationParts`, `validCoordinates`, `resolveTalkCoordinates`, `geographicDistanceKm`, `deriveGeography`, `compareIds`, `definePlugin`, `registerPlugins`, `collectContributions`, plus the schema types (`Talk`, `TalkLink`, `LinkKind`, `ValidationResult`, `Geography`, and so on). |
-| `@wanderer/talks/list` | `ListView`, `listView`, `TalkCard`, `Toolbar`, `TalkGroupSection`, `EmptyState`, `TalkLinkAnchor`, `resolveLinkPolicy`, `Heading`, and the types `TalkViewProps`, `TalkRendererProps`, `ViewContribution`, `TalksContext`. |
-| `@wanderer/talks/globe` | `GlobeView`, `globeView(options)`, `preloadGlobeView`, `GlobeRegionList`, and the types `GlobeViewOptions`, `GlobeColors`, `GlobeRendererProps`, `PositionedMilestone`, `Rgb`. |
+| `@wanderer/talks/helpers` | Pure functions, no `"use client"`: `DEFAULT_BREAKPOINT`, `validateTalks`, `filterTalks`, `groupTalks`, `sortTalks`, `parseCalendarDate`, `formatCalendarDate`, `isUpcoming`, `classifyTalkDate`, `talkYear`, `normalizeSearch`, `safeUrl`, `getTalkLinks`, `getPrimaryLink`, `DEFAULT_PRIMARY_LINK_PRECEDENCE`, `locationLabel`, `locationParts`, `validCoordinates`, `resolveTalkCoordinates`, `geographicDistanceKm`, `deriveGeography`, `compareIds`, `definePlugin`, `registerPlugins`, `collectContributions`, plus the schema types (`Talk`, `TalkLink`, `LinkKind`, `ValidationResult`, `Geography`, and so on). |
+| `@wanderer/talks/list` | `ListView`, `listView`, `TalkCard`, `Toolbar`, `TalkGroupSection`, `EmptyState`, `TalkLinkAnchor`, `resolveLinkPolicy`, `Heading`, and the types `TalkViewProps`, `TalkRendererProps`, `ViewContribution`, `TalksContext`, `EmptyStateProps`, `ToolbarProps`, `TalkLinkAnchorProps`, `HeadingProps`. |
+| `@wanderer/talks/globe` | `GlobeView`, `globeView(options)`, `preloadGlobeView`, `GlobeRegionList`, and the types `GlobeViewOptions`, `GlobeViewProps`, `GlobeColors`, `GlobeRendererProps`, `PositionedMilestone`, `Rgb`. |
 | `@wanderer/talks/styles.css` | The stylesheet. Component styles are scoped to `.wanderer`; one `html:has()` rule locks scrolling while a Wanderer fullscreen dialog is open. |
 
 `definePlugin` is exported from the root entry and from `./helpers`. It is an identity function typed `<T extends TalksPlugin>(plugin: T) => T`, so an unannotated literal gets contextual types for its callbacks.
@@ -132,6 +132,7 @@ import { TALKS } from './talks-data';
 
 // Under Cache Components, reading the clock during prerender is an error.
 // A cached scope pins the snapshot and revalidates it on the cache profile.
+// 'use cache' needs cacheComponents: true in next.config (Next.js 16).
 async function getReferenceDate(): Promise<string> {
   'use cache';
   cacheLife('hours');
@@ -146,6 +147,8 @@ export default async function TalksPage() {
 }
 ```
 
+`'use cache'` and `cacheLife` are Cache Components features: enable them with `cacheComponents: true` in `next.config.ts`, as [examples/next](https://github.com/hrittikhere/wanderer/tree/main/examples/next) does. Without the flag, pass a date your app already computes per request or per build instead.
+
 ```tsx
 // app/talks/talks-client.tsx (Client Component)
 'use client';
@@ -157,6 +160,9 @@ import { useSyncExternalStore } from 'react';
 import { Talks, type ImageComponentProps, type LinkComponentProps, type Talk, type Theme } from '@wanderer/talks';
 import { globeView } from '@wanderer/talks/globe';
 
+// With `responsive` below, desktop visitors start on the globe inline (it is
+// server-rendered and visible before hydration); choosing it in the view
+// switcher opens it fullscreen.
 const views = [globeView({ presentation: 'immersive' })];
 
 function NextLink({ href, children, ...rest }: LinkComponentProps) {
@@ -235,17 +241,18 @@ export function App() {
 
 ## Compatibility
 
-- React 18.2 and later, and React 19, per the peer range. The automated compatibility script (`scripts/react-compat.mjs` in the repository, not in the published package) packs the package, installs it into an isolated project per React version and runs a server render, hydration and interaction check. It exercises React 18.3.1 and the installed React 19 version. The packed list consumer also builds with React 18.2.0.
-- Vite and Next.js App Router production builds are verified using isolated tarball installs, including RSC boundaries and CSS exports. See [examples](examples/README.md).
+- React 18.2 and later, and React 19, per the peer range. The automated compatibility script (`scripts/react-compat.mjs` in the repository, not in the published package) packs the package, installs it into an isolated project per React version and runs a server render, hydration and interaction check. It exercises React 18.2.0 (the floor of the peer range), 18.3.1 and the installed React 19 version, with the default and a custom breakpoint, a dark OS and a plugin renderer.
+- Vite and Next.js App Router production builds are verified using isolated tarball installs, including RSC boundaries and CSS exports. See [examples](https://github.com/hrittikhere/wanderer/blob/main/examples/README.md).
 - Browser verification is performed in Chromium via Playwright. Other browsers are not part of the automated run.
 - The globe needs WebGL (WebGL2, WebGL or `experimental-webgl`). Without it the view shows a fallback with a button back to the list.
 
 ### Known limitations
 
-These frameworks are untested. The notes describe what should happen based on how the package is built, not on verification.
+Remix, Astro and Create React App are untested; their notes describe what should happen based on how the package is built, not on verification.
 
 - **Remix**: untested. The package is ESM and CommonJS with per-file `"use client"` directives, which Remix ignores harmlessly. The client adapter pattern above should work; keep `referenceDate` in the loader.
 - **Astro**: untested. Use the React integration with `client:only="react"` or `client:load`. The globe checks browser APIs after hydration, so SSR does not require `client:only`; verify the chosen Astro integration in your app.
+- **Very large histories**: the list is not virtualized. Typing stays responsive because filtering runs in a deferred render, but several thousand talks make the first render and the server HTML heavy. See [Large histories](docs/configuration.md#large-histories).
 - **Create React App**: untested. `react-scripts` 5 resolves package `exports` maps only partially, so the subpath entries may need explicit paths. It has no `"use client"` handling, which is harmless. The CSS import works.
 
 ## Development and checks

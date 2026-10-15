@@ -65,6 +65,12 @@ export interface GroupOptions {
   upcoming?: 'separate' | 'duplicate' | 'none';
   undatedLabel?: string;
   upcomingLabel?: string;
+  /**
+   * Formats year group labels with Intl.DateTimeFormat `{ year: 'numeric' }` in this locale (UTC), as a range
+   * when a group's talks span two years of the locale's calendar. Without it labels are the Gregorian year.
+   * Ids stay `year-YYYY` either way.
+   */
+  locale?: string;
 }
 
 export interface TalkGroup {
@@ -76,7 +82,7 @@ export interface TalkGroup {
 export interface GeographyOptions {
   /** Called only when a talk has no explicit coordinates. Online talks are never resolved. */
   resolveCoordinates?: (talk: Talk) => Coordinates | null | undefined;
-  /** Great-circle kilometers. Default: 64. Zero merges identical points only. */
+  /** Great-circle kilometers. Default: 64. Zero merges identical points only, including longitude 180 and -180 or any two longitudes at a pole. */
   mergeDistanceKm?: number;
   /** When omitted, no region summary is produced (locations are still listed). */
   assignRegion?: (talk: Talk, coordinates: Coordinates) => string | null | undefined;

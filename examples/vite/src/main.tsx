@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Talks, definePlugin, type Theme } from '@wanderer/talks';
 import { globeView } from '@wanderer/talks/globe';
@@ -7,12 +7,17 @@ import './page.css';
 import { talks, milestones } from './data';
 
 const workshops = definePlugin({ id: 'workshops', filters: [{ id: 'workshop', label: 'Workshops', order: 5, predicate: (talk) => talk.tags?.includes('workshop') ?? false }] });
+const plugins = [workshops];
+const responsive = { small: 'list', large: 'globe' };
 const parameters = new URLSearchParams(window.location.search);
+const themes: readonly Theme[] = ['light', 'dark', 'system'];
 
 function App() {
   const [presentation, setPresentation] = useState<'inline' | 'immersive'>(parameters.get('presentation') === 'immersive' ? 'immersive' : 'inline');
-  const [theme, setTheme] = useState<Theme>(parameters.get('theme') === 'dark' ? 'dark' : 'light');
+  const [theme, setTheme] = useState<Theme>(themes.find((value) => value === parameters.get('theme')) ?? 'light');
   const views = useMemo(() => [globeView({ presentation, intro: false })], [presentation]);
+  // The page around the component follows the same appearance (page.css uses light-dark()).
+  useEffect(() => { document.documentElement.style.colorScheme = theme === 'system' ? 'light dark' : theme; }, [theme]);
   return (
     <main>
       <header className="page-header">
@@ -24,7 +29,18 @@ function App() {
           <label>Appearance <select value={theme} onChange={(event) => setTheme(event.target.value as Theme)}><option value="light">Light</option><option value="dark">Dark</option><option value="system">System</option></select></label>
         </div>
       </header>
-      <Talks talks={talks} referenceDate="2026-10-13" views={views} milestones={milestones} plugins={[workshops]} theme={theme} direction={parameters.get('dir') === 'rtl' ? 'rtl' : 'ltr'} />
+      <Talks
+        talks={talks}
+        referenceDate="2026-10-13"
+        views={views}
+        milestones={milestones}
+        plugins={plugins}
+        theme={theme}
+        direction={parameters.get('dir') === 'rtl' ? 'rtl' : 'ltr'}
+        // Query options the browser tests use: ?escape=false and ?responsive=1.
+        escapeToList={parameters.get('escape') !== 'false'}
+        responsive={parameters.has('responsive') ? responsive : undefined}
+      />
       <footer>Synthetic sample data. <a href="https://github.com/hrittikhere/wanderer">Explore Wanderer on GitHub</a></footer>
     </main>
   );

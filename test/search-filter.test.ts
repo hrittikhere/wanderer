@@ -1,5 +1,5 @@
 import { describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { filterTalks, groupTalks, normalizeSearch } from '../src/helpers.js';
 import { FIXTURE_TALKS, REFERENCE_DATE, talk } from './support/fixtures.js';
 

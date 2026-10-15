@@ -62,6 +62,13 @@ if (tscResult.status !== 0) {
   process.exit(tscResult.status ?? 1);
 }
 
+// dist/types sits under the package's "type": "module", so TypeScript reads those
+// declarations as ESM. The `require` condition points at a copy inside dist/cjs,
+// whose package.json makes them CommonJS declarations (module node16 consumers).
+for (const file of await readdir(path.join(distDir, 'types'), { recursive: true })) {
+  if (/\.d\.ts(?:\.map)?$/.test(file)) await cp(path.join(distDir, 'types', file), path.join(distDir, 'cjs', file));
+}
+
 await cp(path.join(srcDir, 'styles.css'), path.join(distDir, 'styles.css'));
 
 // Post-build checks. Directive preservation is the one that silently breaks
@@ -89,7 +96,7 @@ for (const file of await readdir(path.join(distDir, 'esm'), { recursive: true })
 }
 
 for (const entry of ['index', 'helpers', 'list', 'globe']) {
-  for (const target of [`esm/${entry}.js`, `cjs/${entry}.js`, `types/${entry}.d.ts`]) {
+  for (const target of [`esm/${entry}.js`, `cjs/${entry}.js`, `types/${entry}.d.ts`, `cjs/${entry}.d.ts`]) {
     await readFile(path.join(distDir, target)).catch(() => problems.push(`missing build output: dist/${target}`));
   }
 }

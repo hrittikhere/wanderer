@@ -1,6 +1,6 @@
 # Styling
 
-The stylesheet at `@wanderer/talks/styles.css` is plain CSS scoped to `.wanderer`. It sets no global element styles. Colors, type, spacing, radii, shadows, motion and globe colors are custom properties you can override.
+The stylesheet at `@wanderer/talks/styles.css` is plain CSS scoped to `.wanderer`. It sets no global element styles except one: `html:has(.wanderer-shell--immersive[open]) { overflow: hidden; }` locks document scrolling while a fullscreen dialog is open. Colors, type, spacing, radii, shadows, motion and globe colors are custom properties you can override.
 
 ```ts
 import '@wanderer/talks/styles.css';
@@ -8,7 +8,9 @@ import '@wanderer/talks/styles.css';
 
 ## Tokens
 
-All tokens are defined on `.wanderer`. The dark column applies for `data-wanderer-theme="dark"`, for `system` under `prefers-color-scheme: dark`, and for `system` under a `data-wanderer-scheme="dark"` ancestor. Tokens with one value do not change between palettes.
+All tokens are defined on `.wanderer`. The dark column applies for `data-wanderer-theme="dark"`, for `system` under `prefers-color-scheme: dark`, and for `system` when the nearest `data-wanderer-scheme` ancestor says `dark`. Tokens with one value do not change between palettes.
+
+Through the `tokens` prop, numbers are written as they are, without a unit, which suits the unitless tokens (`--wanderer-line-height`, `--wanderer-z-overlay`). Give lengths, durations and colors as strings with their unit: `{ '--wanderer-space-5': '1.5rem' }`, not `24`.
 
 ### Surfaces
 
@@ -124,7 +126,7 @@ Gaps, paddings and margins throughout use these steps.
 |---|---|---|
 | `--wanderer-duration` | `160ms` | Control transitions. |
 | `--wanderer-duration-slow` | `420ms` | Milestone callout entrance. |
-| `--wanderer-easing` | `cubic-bezier(0.2, 0.8, 0.2, 1)` | All transitions and keyframes. |
+| `--wanderer-easing` | `cubic-bezier(0.2, 0.8, 0.2, 1)` | All transitions and keyframes, including the globe reveal, the intro sketch and the milestone connector and dot fades. Their durations are fixed or come from `--wanderer-globe-reveal-duration`. |
 
 ### Globe
 
@@ -136,13 +138,13 @@ Gaps, paddings and margins throughout use these steps.
 | `--wanderer-globe-glow` | `#ffffff` | `#17171b` | Glow color passed to the renderer. |
 | `--wanderer-globe-connector` | `#1f5ed6` | `#7fb0ff` | Dashed connector lines from milestone dots to the callout (`.wanderer-globe__connectors`). |
 | `--wanderer-globe-max-size` | `44rem` | same | Maximum width of the square globe stage. |
-| `--wanderer-globe-reveal-duration` | `920ms` | same | Cross-fade from the intro sketch to the globe canvas. Override it on `.wanderer`, a theme selector or the `tokens` prop like any other token. |
+| `--wanderer-globe-reveal-duration` | `920ms` | same | Cross-fade from the intro sketch to the globe canvas. Override it on `.wanderer`, a theme selector or the `tokens` prop like any other token, in `ms` or `s`. The renderer reads it when the intro starts and removes the sketch only after the cross-fade has run for this long. |
 
 The globe view reads `--wanderer-globe-land`, `--wanderer-globe-marker`, `--wanderer-globe-bg` and `--wanderer-globe-glow` from the computed style of its stage element and converts them to 0 to 1 RGB for WebGL. Any CSS color syntax the browser can resolve works. The values are read on mount and again when `theme` or the color scheme changes, so overrides from consumer CSS and the `tokens` prop reach the renderer. The renderer falls back to built-in values when a token is empty.
 
-The immersive presentation puts the whole shell in a native fullscreen `<dialog>`, including search, filters, view buttons and the exit control. Background content is inert, focus stays inside, and the shell scrolls when necessary. The stage is capped at `60vh` on desktop and `44vh` on smaller screens. The accessible location list follows the globe on small screens. Without another inline view to exit to, the shell stays inline.
+The immersive presentation puts the whole shell in a native fullscreen `<dialog>`, including search, filters, view buttons and the exit control. Background content is inert, focus stays inside, and the shell scrolls when necessary. The stage is capped at `60vh` on desktop and `44vh` on smaller screens. The accessible location list follows the globe in reading and focus order; on wide layouts it is shown in the first column beside the globe. Without another inline view to exit to, the shell stays inline.
 
-Milestones have bounded thumbnails. When space allows, the callout sits beside the globe; otherwise it sits below in document flow. Custom callout content is constrained to a scrollable 20rem height. A select exposes every milestone, selecting one pauses automatic motion, and dismissing one keeps it dismissed until animation is resumed. Reduced motion disables automatic callouts but preserves manual selection.
+Milestones have bounded thumbnails. Milestone ids must be unique: a repeated id keeps its first milestone and the rest are ignored. When space allows, the callout sits beside the globe; otherwise it sits below in document flow. Custom callout content is constrained to a scrollable 20rem height. A select exposes every milestone; choosing one pauses automatic motion and is announced politely (the select also points at the card with `aria-controls`), while choosing the placeholder only clears the selection. Keyboard focus inside a card pauses automatic motion, so a timed callout never disappears under focus, and Dismiss moves focus to the select. Dismissing a card keeps it dismissed until animation is resumed. Reduced motion disables automatic callouts but preserves manual selection. The location panel renders the talks of the open location only, and the drag hint is shown only while the globe can be drawn.
 
 ## Class naming
 
@@ -177,10 +179,23 @@ Three levels, from broad to narrow:
      --wanderer-font-heading: "Inter", sans-serif;
      --wanderer-radius-full: 0.5rem;
    }
-   .wanderer[data-wanderer-theme="dark"] {
+   ```
+
+   Dark-only overrides have to match each way the dark palette applies: an explicit `theme="dark"`, a dark host hint under `theme="system"` (the default), and the OS preference under `theme="system"`. A rule on `.wanderer[data-wanderer-theme="dark"]` alone never matches the default theme.
+
+   ```css
+   .wanderer[data-wanderer-theme="dark"],
+   [data-wanderer-scheme="dark"] .wanderer[data-wanderer-theme="system"] {
      --wanderer-accent: #ff8433;
    }
+   @media (prefers-color-scheme: dark) {
+     .wanderer[data-wanderer-theme="system"]:not([data-wanderer-scheme="light"] *) {
+       --wanderer-accent: #ff8433;
+     }
+   }
    ```
+
+   These selectors match the stylesheet's own specificity, so loading them later wins. They do not model a light hint nested inside a dark one; hosts that nest hints should pass an explicit `theme` instead.
 
 2. **Per-instance `tokens` prop.** Inline custom properties on the root, highest precedence.
 
@@ -206,7 +221,7 @@ The palette rules and the hint are plain class and attribute selectors with no `
 
 - `theme="light"` or `"dark"` sets `data-wanderer-theme` and the palette follows it regardless of the OS.
 - `theme="system"` (default) uses `prefers-color-scheme` in CSS. On the server and during hydration the component reports `colorScheme: 'light'` in its context; the CSS already paints dark when the OS prefers it, so there is no flash for pure system themes.
-- **Hosts with their own toggle**: resolve the theme in the host and pass `theme="dark"` or `"light"`. If the host resolves the theme before hydration with an inline script, also set `data-wanderer-scheme="dark"` or `"light"` on `<html>` or any ancestor. Under `system`, the stylesheet uses that hint instead of the OS preference, so the first paint matches the host even before React runs. After hydration `useColorScheme` reads the nearest ancestor hint too and watches it with a `MutationObserver`, so under `system` the context's `colorScheme` and the globe's default WebGL colors follow the hint ahead of the OS preference. Passing an explicit `theme` once hydrated is still the simplest way to keep everything in sync.
+- **Hosts with their own toggle**: resolve the theme in the host and pass `theme="dark"` or `"light"`. If the host resolves the theme before hydration with an inline script, also set `data-wanderer-scheme="dark"` or `"light"` on `<html>` or any ancestor. Under `system`, the stylesheet uses the nearest such hint instead of the OS preference, so the first paint matches the host even before React runs. When hints are nested, the nearest one wins in the stylesheet (up to four nested hints) and in `useColorScheme` alike. After hydration `useColorScheme` reads the nearest ancestor hint too and watches the document with a `MutationObserver`, so under `system` the context's `colorScheme` and the globe's default WebGL colors follow the hint ahead of the OS preference, including a hint a theme provider sets, changes or removes after hydration. Passing an explicit `theme` once hydrated is still the simplest way to keep everything in sync.
 - The root sets the `color-scheme` property (`light` or `dark`), so native controls such as the search field's cancel button and scrollbars match.
 - Nothing is written to `localStorage` and no theme is persisted. The host owns persistence.
 
@@ -244,6 +259,7 @@ Inside the component:
 | `data-wanderer-upcoming` | `.wanderer-talk` | `true` or absent |
 | `data-wanderer-format` | `.wanderer-talk` | `in-person`, `online`, `hybrid` |
 | `data-wanderer-link` | anchors | link kind |
+| `data-wanderer-unsafe` | the `<span>` that replaces a link whose URL fails `safeUrl` | `true` |
 | `data-wanderer-globe-status` | `.wanderer-globe` | `idle`, `loading`, `ready`, `error` |
 | `data-wanderer-callout` | `.wanderer-globe__stage` | `beside` when the measured free inline-end space fits the milestone callout next to the stage (connector lines are drawn), `below` when it must sit below the stage. |
 | `data-wanderer-globe-error` | `.wanderer-globe` | `module`, `webgl`, `runtime` or absent |
@@ -251,10 +267,11 @@ Inside the component:
 | `data-wanderer-intro` | `.wanderer-globe__scene` | `particles`, `reveal`, `fade`, `done`: the intro cross-fade phase |
 | `data-wanderer-active` | `.wanderer-globe__connector`, `.wanderer-globe__milestone-dot` | `true` for the active milestone |
 | `data-wanderer-milestone` | `.wanderer-globe__milestone-dot` | milestone id |
-| `data-wanderer-tooltip-position` | `.wanderer-globe__tooltip` | `above` when flipped above the marker |
+| `data-wanderer-tooltip-position` | `.wanderer-globe__tooltip` | `above` when flipped above the marker, otherwise `below` (always present) |
+| `data-wanderer-announcement` | polite live regions | `results` (the debounced result count) or `milestone` (a milestone chosen in the select) |
 | `data-wanderer-expanded` | `.wanderer-globe__location` | `true` when its panel is open |
 | `data-wanderer-milestone` | `.wanderer-globe__callout` | active milestone id |
 
 ## Fullscreen integration
 
-`globeView({ presentation: 'immersive' })` opens a native dialog after hydration. The stylesheet locks document scrolling while `.wanderer-shell--immersive[open]` exists; no host scroll-lock recipe is needed. Escape returns to an inline view unless `escapeToList` is false or `isModalOpen()` vetoes it. The explicit Exit fullscreen button remains available. Prefer a list default so opening fullscreen is an explicit visitor action.
+`globeView({ presentation: 'immersive' })` opens a native dialog when the visitor chooses the view, when the `view` prop selects it, or when a fixed `defaultView` starts on it, and only after hydration: the server HTML and the first client render show it inline. When it is only the `responsive` default (on load or after a breakpoint crossing) it stays inline, and choosing it in the view switcher opens fullscreen. The stylesheet locks document scrolling on `html` and `body` while `.wanderer-shell--immersive[open]` exists; no host scroll-lock recipe is needed. Where `showModal()` is missing the dialog falls back to the `open` attribute outside the top layer and stacks at `--wanderer-z-overlay`. Escape returns to an inline view unless `escapeToList` is false or `isModalOpen()` vetoes it; the explicit Exit fullscreen button remains available. Browsers limit how often a page may cancel a close request, so after repeated Escape presses (or the Android back gesture) the browser closes the dialog anyway, and the component follows it back to the inline view. A controlled parent that declines that exit gets the dialog reopened. `.wanderer-globe--immersive` and `TalkViewProps.presentation` describe the presentation in effect, which is `inline` whenever the dialog is not open.

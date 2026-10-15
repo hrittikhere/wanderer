@@ -1,6 +1,6 @@
 import { createElement, type HTMLAttributes, type ReactNode } from 'react';
 
-interface HeadingProps extends HTMLAttributes<HTMLHeadingElement> {
+export interface HeadingProps extends HTMLAttributes<HTMLHeadingElement> {
   level: number;
   children?: ReactNode;
 }

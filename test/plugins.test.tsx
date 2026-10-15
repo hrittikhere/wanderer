@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, test } from 'node:test';
-import assert from 'node:assert/strict';
+import assert from './support/assert.js';
 import { act, createElement, type ReactNode } from 'react';
 import type { Root } from 'react-dom/client';
 import { collectContributions, registerPlugins } from '../src/plugins.js';
@@ -48,6 +48,16 @@ describe('registerPlugins and collectContributions', () => {
   test('definePlugin returns the same object', () => {
     const plugin = { id: 'identity' };
     assert.equal(definePlugin(plugin), plugin);
+  });
+
+  test('sparse plugin arrays report the missing entry', () => {
+    const sparse = new Array<{ id: string }>(1);
+    assert.throws(() => registerPlugins(sparse), /entry 0 is undefined/);
+  });
+
+  test('sparse contribution arrays report the missing entry', () => {
+    const sparse = new Array<{ id: string }>(1);
+    assert.throws(() => collectContributions([{ id: 'sparse', filters: sparse }], (plugin) => plugin.filters), /entry 0 is undefined/);
   });
 });
 
@@ -149,6 +159,22 @@ describe('plugins through <Talks>', () => {
     assert.ok(buttons(beacon, 'button.wanderer-action').some((button) => button.textContent === 'Share beacon-2029'));
   });
 
+  test('a plugin action with no link for a talk and no onAction is skipped instead of rendering an inert button', async () => {
+    const transcripts: Record<string, string> = { 'aurora-2030': 'https://transcripts.example/aurora-2030' };
+    const plugin = definePlugin({
+      id: 'transcripts',
+      actions: [
+        { id: 'transcript', label: 'Transcript', getLink: (talk) => (transcripts[talk.id] ? { kind: 'general', url: transcripts[talk.id] } : undefined) },
+        { id: 'nothing', label: 'Nothing' },
+      ],
+    });
+    const section = await render({ plugins: [plugin] });
+    assert.equal(section.querySelectorAll('button.wanderer-action').length, 0, 'no button without a handler');
+    const rendered = [...section.querySelectorAll('.wanderer-action')].filter((node) => ['Transcript', 'Nothing'].includes(node.textContent ?? ''));
+    assert.equal(rendered.length, 1);
+    assert.equal(rendered[0].getAttribute('href'), 'https://transcripts.example/aurora-2030');
+  });
+
   test('a plugin renderer with when() replaces the default card for matching talks only', async () => {
     function Compact({ talk }: TalkRendererProps) {
       return createElement('div', { className: 'custom-card', 'data-talk': talk.id }, talk.title.toUpperCase());
@@ -162,6 +188,18 @@ describe('plugins through <Talks>', () => {
     assert.deepEqual(custom.map((node) => node.getAttribute('data-talk')), ['cinder-online']);
     assert.equal(custom[0].textContent, 'CINDER BUILD PIPELINES');
     assert.equal(section.querySelectorAll('.wanderer-talk').length, FIXTURE_TALKS.length - 1);
+  });
+
+  test('context.getActions falls back to the default label when a talk built outside validation has a blank link label', async () => {
+    const labels: string[][] = [];
+    function Probe({ talk, context }: TalkRendererProps) {
+      const raw = { ...talk, links: [{ kind: 'general' as const, url: 'https://raw.example', label: '  ' }, { kind: 'general' as const, url: 'https://named.example', label: 'Notes' }] };
+      labels.push(context.getActions(raw).filter((action) => action.link).map((action) => action.label));
+      return createElement('div', { className: 'probe' }, talk.id);
+    }
+    await render({ talks: [FIXTURE_TALKS[2]], plugins: [definePlugin({ id: 'probe', renderers: [{ id: 'probe', Component: Probe }] })] });
+    assert.ok(labels.length > 0, 'the renderer ran');
+    assert.deepEqual(labels.at(-1), ['Link', 'Notes']);
   });
 
   test('a renderer that throws is contained by the error boundary and the rest still renders', async () => {
@@ -212,9 +250,9 @@ describe('plugins through <Talks>', () => {
   });
 
   test('a plugin that registers the reserved view id "list" throws', async () => {
-    const errors: unknown[] = [];
+    // Only silences React's report of the thrown error; the rejection is the assertion.
     const originalError = console.error;
-    console.error = (...args: unknown[]) => { errors.push(args); };
+    console.error = () => {};
     try {
       const plugin = definePlugin({ id: 'rogue', views: [{ id: 'list', label: 'Mine', Component: () => null }] });
       await assert.rejects(render({ plugins: [plugin] }), /Duplicate or reserved plugin\/contribution ID: list/);

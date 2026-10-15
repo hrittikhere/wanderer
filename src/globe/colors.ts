@@ -10,13 +10,19 @@ export type Rgba = [number, number, number, number];
  * syntax (oklch, lab, color()) returns null and is resolved through a canvas.
  */
 export function parseCssColor(value: string): Rgba | null {
-  const match = /^\s*rgba?\(\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*(?:[,/]\s*([\d.]+%?)\s*)?\)\s*$/i.exec(value);
-  if (!match) return null;
-  const alphaRaw = match[4];
+  // Linear-time on any input: one anchored prefix check, then a split on a
+  // single character class. Every component must be a finite number.
+  const body = /^rgba?\((.*)\)$/i.exec(value.trim())?.[1];
+  if (body === undefined) return null;
+  const parts = body.split(/[\s,/]+/).filter(Boolean);
+  if (parts.length !== 3 && parts.length !== 4) return null;
+  const number = /^(?:\d+\.?\d*|\.\d+)$/;
+  if (!parts.slice(0, 3).every((part) => number.test(part))) return null;
+  const alphaRaw = parts[3];
+  if (alphaRaw !== undefined && !number.test(alphaRaw.endsWith('%') ? alphaRaw.slice(0, -1) : alphaRaw)) return null;
   const alpha = alphaRaw === undefined ? 1 : alphaRaw.endsWith('%') ? Number(alphaRaw.slice(0, -1)) / 100 : Number(alphaRaw);
   const channel = (raw: string) => Math.min(1, Math.max(0, Number(raw) / 255));
-  if (!Number.isFinite(alpha)) return null;
-  return [channel(match[1]), channel(match[2]), channel(match[3]), Math.min(1, Math.max(0, alpha))];
+  return [channel(parts[0]), channel(parts[1]), channel(parts[2]), Math.min(1, Math.max(0, alpha))];
 }
 
 /** Composites a translucent color over an opaque base, since the WebGL uniforms are opaque. */
