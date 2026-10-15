@@ -1,6 +1,10 @@
 // Per-test JSDOM harness. Each call creates a fresh window, installs the DOM
 // globals React DOM needs, and stubs window.matchMedia with a controllable
 // implementation so tests can simulate breakpoint and OS preference changes.
+// jsdom has no IntersectionObserver or ResizeObserver; recording fakes stand
+// in, and tests deliver entries with intersect() and resize(). An exception
+// that reaches the window (React reports a throwing event handler there)
+// fails cleanup() unless the test drained it with takeErrors().
 import { JSDOM, VirtualConsole } from 'jsdom';
 
 export interface MediaFlags {
@@ -53,6 +57,33 @@ function evaluate(query: string, flags: MediaFlags): boolean {
   return Boolean(min || max || /prefers-/.test(query));
 }
 
+type ObserverKind = 'intersection' | 'resize';
+
+interface ObserverRecord {
+  observer: object;
+  callback: (entries: object[], observer: object) => void;
+  targets: Set<Element>;
+}
+
+/** IntersectionObserver and ResizeObserver stand-ins that only report when a test says so. */
+function fakeObservers(registry: Record<ObserverKind, Set<ObserverRecord>>) {
+  const make = (kind: ObserverKind) => class {
+    readonly root = null;
+    readonly rootMargin = '0px';
+    readonly thresholds = [0];
+    private readonly record: ObserverRecord;
+    constructor(callback: ObserverRecord['callback']) {
+      this.record = { observer: this, callback, targets: new Set() };
+      registry[kind].add(this.record);
+    }
+    observe(target: Element): void { this.record.targets.add(target); }
+    unobserve(target: Element): void { this.record.targets.delete(target); }
+    disconnect(): void { this.record.targets.clear(); }
+    takeRecords(): object[] { return []; }
+  };
+  return { IntersectionObserver: make('intersection'), ResizeObserver: make('resize') };
+}
+
 export interface DomHandle {
   dom: JSDOM;
   window: JSDOM['window'];
@@ -64,13 +95,22 @@ export interface DomHandle {
   setReducedMotion(value: boolean): void;
   /** Number of live matchMedia lists that currently have change listeners. */
   subscriptionCount(): number;
+  /** Delivers an IntersectionObserver entry for `target` to every observer watching it. */
+  intersect(target: Element, isIntersecting: boolean): void;
+  /** Delivers a ResizeObserver entry with this content box for `target` to every observer watching it. */
+  resize(target: Element, width: number, height: number): void;
+  /** Elements currently observed by any observer of this kind. */
+  observed(kind: ObserverKind): Element[];
+  /** Returns and clears the exceptions that reached the window since the last call. */
+  takeErrors(): unknown[];
+  /** Restores the globals and closes the window; throws if an exception reached the window and was not taken. */
   cleanup(): void;
 }
 
 const GLOBAL_KEYS = [
   'window', 'document', 'HTMLElement', 'HTMLInputElement', 'HTMLAnchorElement', 'HTMLButtonElement',
   'HTMLCanvasElement', 'Element', 'Node', 'Text', 'Event', 'KeyboardEvent', 'MouseEvent', 'CustomEvent',
-  'getComputedStyle', 'DocumentFragment', 'SVGElement', 'IntersectionObserver',
+  'getComputedStyle', 'DocumentFragment', 'SVGElement', 'IntersectionObserver', 'ResizeObserver', 'MutationObserver',
 ] as const;
 
 export function installDom(options: Partial<MediaFlags> & { html?: string } = {}): DomHandle {
@@ -94,6 +134,17 @@ export function installDom(options: Partial<MediaFlags> & { html?: string } = {}
     return list;
   };
   Object.defineProperty(window, 'matchMedia', { value: matchMedia, configurable: true, writable: true });
+  const observers: Record<ObserverKind, Set<ObserverRecord>> = { intersection: new Set(), resize: new Set() };
+  for (const [name, value] of Object.entries(fakeObservers(observers))) {
+    if (!(name in window)) Object.defineProperty(window, name, { value, configurable: true, writable: true });
+  }
+  const deliver = (kind: ObserverKind, target: Element, entry: object) => {
+    for (const record of [...observers[kind]]) {
+      if (record.targets.has(target)) record.callback([{ target, time: window.performance.now(), ...entry }], record.observer);
+    }
+  };
+  const errors: unknown[] = [];
+  window.addEventListener('error', (event) => { errors.push(event.error ?? event.message); });
 
   const notify = () => {
     for (const entry of entries) {
@@ -123,6 +174,21 @@ export function installDom(options: Partial<MediaFlags> & { html?: string } = {}
     setPrefersDark(value) { flags.prefersDark = value; notify(); },
     setReducedMotion(value) { flags.reducedMotion = value; notify(); },
     subscriptionCount() { return entries.filter((entry) => entry.list.listenerCount > 0).length; },
+    intersect(target, isIntersecting) {
+      const rect = target.getBoundingClientRect();
+      deliver('intersection', target, {
+        isIntersecting, intersectionRatio: isIntersecting ? 1 : 0, boundingClientRect: rect,
+        intersectionRect: isIntersecting ? rect : new window.DOMRect(), rootBounds: null,
+      });
+    },
+    resize(target, width, height) {
+      const size = [{ inlineSize: width, blockSize: height }];
+      deliver('resize', target, {
+        contentRect: new window.DOMRect(0, 0, width, height), contentBoxSize: size, borderBoxSize: size, devicePixelContentBoxSize: size,
+      });
+    },
+    observed(kind) { return [...observers[kind]].flatMap((record) => [...record.targets]); },
+    takeErrors() { return errors.splice(0); },
     cleanup() {
       for (const key of GLOBAL_KEYS) {
         const descriptor = previous.get(key);
@@ -130,6 +196,10 @@ export function installDom(options: Partial<MediaFlags> & { html?: string } = {}
         else delete (globalThis as Record<string, unknown>)[key];
       }
       window.close();
+      if (errors.length) {
+        const messages = errors.splice(0).map((error) => (error instanceof Error ? error.stack ?? error.message : String(error)));
+        throw new Error(`An exception reached the window and no test took it:\n${messages.join('\n')}`);
+      }
     },
   };
 }

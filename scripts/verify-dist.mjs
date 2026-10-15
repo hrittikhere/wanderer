@@ -32,6 +32,7 @@ const entries = {
     'validateTalks', 'filterTalks', 'groupTalks', 'sortTalks', 'parseCalendarDate', 'formatCalendarDate', 'isUpcoming', 'classifyTalkDate',
     'talkYear', 'normalizeSearch', 'safeUrl', 'getTalkLinks', 'getPrimaryLink', 'DEFAULT_PRIMARY_LINK_PRECEDENCE', 'locationLabel', 'locationParts',
     'validCoordinates', 'resolveTalkCoordinates', 'geographicDistanceKm', 'deriveGeography', 'compareIds', 'registerPlugins', 'collectContributions',
+    'DEFAULT_BREAKPOINT',
   ],
   './list': ['ListView', 'listView', 'TalkCard', 'Toolbar', 'TalkGroupSection', 'EmptyState', 'TalkLinkAnchor', 'resolveLinkPolicy', 'Heading'],
   './globe': ['GlobeView', 'globeView', 'preloadGlobeView', 'GlobeRegionList'],

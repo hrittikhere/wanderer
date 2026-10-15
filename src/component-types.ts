@@ -340,7 +340,7 @@ export interface TalksContext {
 }
 
 export interface ResponsiveViews {
-  /** Minimum width in CSS pixels for the large view. Default 1024. */
+  /** Minimum width in CSS pixels for the large view. Default `DEFAULT_BREAKPOINT` (1024); a value that is not a positive number falls back to it. */
   breakpoint?: number;
   small: string;
   large: string;

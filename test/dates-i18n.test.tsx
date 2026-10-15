@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, test } from 'node:test';
+import { describe, test } from 'node:test';
 import assert from './support/assert.js';
 import { act, createElement } from 'react';
-import type { Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { Talks } from '../src/index.js';
 import { GlobeRegionList, globeView } from '../src/globe.js';
@@ -9,11 +8,11 @@ import type { TalkViewProps } from '../src/component-types.js';
 import { facingPhi, projectMarker } from '../src/globe/projection.js';
 import { formatCalendarDate, groupTalks, sortTalks } from '../src/helpers.js';
 import { click, installDom } from './support/dom.js';
-import { loadReactDomClient } from './support/react.js';
+import { hydrate, loadReactDomClient } from './support/react.js';
 import { installFakeWebGl } from './support/webgl.js';
 import { FIXTURE_TALKS, REFERENCE_DATE, talk } from './support/fixtures.js';
 
-const { createRoot, hydrateRoot } = await loadReactDomClient();
+const { createRoot } = await loadReactDomClient();
 
 const utc = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const yearFormat = (locale: string) => new Intl.DateTimeFormat(locale, { year: 'numeric', timeZone: 'UTC' });
@@ -213,11 +212,6 @@ describe('undated card margin', () => {
 });
 
 describe('hydration with different Intl data on the server', () => {
-  const originalError = console.error;
-  let consoleErrors: unknown[][];
-  beforeEach(() => { consoleErrors = []; console.error = (...args: unknown[]) => { consoleErrors.push(args); }; });
-  afterEach(() => { console.error = originalError; });
-
   test('a date the browser formats differently keeps the server text instead of regenerating the tree', async () => {
     const dom = installDom({ width: 1024 });
     const container = dom.document.getElementById('root')!;
@@ -229,12 +223,9 @@ describe('hydration with different Intl data on the server', () => {
     container.querySelector('time')!.textContent = '10 Sep 2030';
     container.querySelector('.wanderer-talk__when span')!.textContent = 'Sep';
     const serverRoot = container.querySelector('.wanderer');
-    const errors: string[] = [];
-    let root!: Root;
-    await act(async () => { root = hydrateRoot(container, element(), { onRecoverableError: (error) => { errors.push(String(error)); } }); });
+    const { root, errors } = await hydrate(container, element());
     try {
-      assert.deepEqual(errors, []);
-      assert.deepEqual(consoleErrors, []);
+      assert.deepEqual(errors, [], 'no recoverable error and no console warning');
       assert.equal(container.querySelector('.wanderer'), serverRoot, 'the server DOM was hydrated, not replaced');
       assert.equal(container.querySelector('time')?.textContent, '10 Sep 2030');
     } finally {

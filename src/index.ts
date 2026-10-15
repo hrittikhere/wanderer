@@ -4,7 +4,7 @@
 // `@wanderer/talks/globe` so list-only consumers never load it.
 export * from './helpers.js';
 export type * from './component-types.js';
-export { Talks, DEFAULT_BREAKPOINT } from './components/Talks.js';
+export { Talks } from './components/Talks.js';
 export { useTalks } from './context.js';
 export { createDefaultCopy, mergeCopy } from './copy.js';
 export { ListView, listView, TalkGroupSection, EmptyState } from './components/ListView.js';

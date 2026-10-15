@@ -92,16 +92,22 @@ const talks = [
   { id: 'remote', title: 'Remote Pipelines', event: 'Online Meetup', date: '2031-07-07', description: 'Online only.', format: 'online' },
 ];
 
-for (const width of [390, 1440]) {
+// The default breakpoint at both sides; a custom one, which adds an inline
+// instance-scoped <style> that React 18 and 19 serialize differently; and a dark
+// OS with a plugin renderer, so the color scheme and the card boundaries change
+// right after hydration, which React 18 handles only for non-urgent updates.
+for (const { width, breakpoint, dark } of [{ width: 390 }, { width: 1440 }, { width: 1000, breakpoint: 900 }, { width: 390, dark: true }]) {
+  const label = String(width) + (breakpoint ? '@' + breakpoint : '') + (dark ? '-dark' : '');
   const result = { recoverableErrors: [], shellsBeforeHydration: 0, shellsAfterHydration: 0, viewAfterHydration: null, viewAfterClick: null, globeFallback: null, focusedHeading: null, viewChanges: [] };
-  summary.widths[width] = result;
+  summary.widths[label] = result;
   const virtualConsole = new VirtualConsole();
   virtualConsole.on('error', () => {});
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { pretendToBeVisual: true, url: 'https://example.test/', virtualConsole });
   const { window } = dom;
   window.matchMedia = (query) => {
     const min = /min-width:\s*(\d+)px/.exec(query);
-    return { matches: min ? width >= Number(min[1]) : false, media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} };
+    const matches = min ? width >= Number(min[1]) : /prefers-color-scheme:\s*dark/.test(query) && Boolean(dark);
+    return { matches, media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} };
   };
   Object.defineProperty(window.HTMLCanvasElement.prototype, 'getContext', { value: () => null, configurable: true });
   for (const key of ['window', 'document', 'HTMLElement', 'HTMLInputElement', 'HTMLAnchorElement', 'HTMLButtonElement', 'HTMLCanvasElement', 'Element', 'Node', 'Event', 'KeyboardEvent', 'MouseEvent', 'getComputedStyle', 'IntersectionObserver']) {
@@ -110,31 +116,45 @@ for (const width of [390, 1440]) {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   const { renderToString } = await import('react-dom/server');
   const { hydrateRoot } = await import('react-dom/client');
-  const { Talks } = await import('@wanderer/talks');
+  const { Talks, definePlugin, useTalks } = await import('@wanderer/talks');
   const { globeView } = await import('@wanderer/talks/globe');
   const act = React.act ?? React.unstable_act;
+  const Card = ({ talk }) => React.createElement('article', { className: 'compat-card', 'data-scheme': useTalks().colorScheme }, talk.title);
+  const plugins = dark ? [definePlugin({ id: 'compat', renderers: [{ id: 'compat', Component: Card }] })] : undefined;
   const element = () => React.createElement(Talks, {
-    talks, referenceDate: '2031-06-15', views: [globeView()], responsive: { small: 'list', large: 'globe' },
+    talks, referenceDate: '2031-06-15', views: [globeView()], responsive: { small: 'list', large: 'globe', breakpoint }, plugins,
     onViewChange: (view, change) => result.viewChanges.push(view + ':' + change.reason),
   });
   const container = window.document.getElementById('root');
   container.innerHTML = renderToString(element());
   result.shellsBeforeHydration = container.querySelectorAll('.wanderer-shell').length;
+  if (breakpoint) {
+    const style = container.querySelector('style');
+    const instance = container.querySelector('.wanderer').getAttribute('data-wanderer-instance');
+    const selectors = style ? [...style.sheet.cssRules].map((rule) => rule.cssRules[0].selectorText) : [];
+    result.inlineStyle = selectors;
+    const expectedSelectors = ['small', 'large'].map((shell) => container.querySelector('[data-wanderer-instance="' + instance + '"] .wanderer-shell--' + shell));
+    if (selectors.length !== 2 || selectors.some((selector, index) => container.querySelector(selector) !== expectedSelectors[index])) fail(label + ': the inline breakpoint rules do not match their shells');
+  }
   let root;
   await act(async () => { root = hydrateRoot(container, element(), { onRecoverableError: (error) => result.recoverableErrors.push(String(error)) }); });
   const section = container.querySelector('.wanderer');
   result.shellsAfterHydration = container.querySelectorAll('.wanderer-shell').length;
   result.viewAfterHydration = section.getAttribute('data-wanderer-view');
-  const expectedView = width >= 1024 ? 'globe' : 'list';
-  if (result.viewAfterHydration !== expectedView) fail(width + ': expected ' + expectedView + ' after hydration, got ' + result.viewAfterHydration);
-  if (result.recoverableErrors.length) fail(width + ': recoverable hydration errors');
-  if (result.shellsBeforeHydration !== 2 || result.shellsAfterHydration !== 1) fail(width + ': shells ' + result.shellsBeforeHydration + ' -> ' + result.shellsAfterHydration);
+  if (dark) {
+    result.cardSchemes = [...section.querySelectorAll('.compat-card')].map((card) => card.getAttribute('data-scheme'));
+    if (result.cardSchemes.length !== talks.length || result.cardSchemes.some((scheme) => scheme !== 'dark')) fail(label + ': plugin cards ' + JSON.stringify(result.cardSchemes));
+  }
+  const expectedView = width >= (breakpoint ?? 1024) ? 'globe' : 'list';
+  if (result.viewAfterHydration !== expectedView) fail(label + ': expected ' + expectedView + ' after hydration, got ' + result.viewAfterHydration);
+  if (result.recoverableErrors.length) fail(label + ': recoverable hydration errors');
+  if (result.shellsBeforeHydration !== 2 || result.shellsAfterHydration !== 1) fail(label + ': shells ' + result.shellsBeforeHydration + ' -> ' + result.shellsAfterHydration);
   const other = [...section.querySelectorAll('.wanderer-views__button')].find((button) => button.getAttribute('aria-pressed') === 'false');
   await act(async () => { other.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true })); });
   result.viewAfterClick = section.getAttribute('data-wanderer-view');
   result.focusedHeading = window.document.activeElement?.id ?? null;
-  if (result.viewAfterClick === result.viewAfterHydration) fail(width + ': clicking the view switcher did not change the view');
-  if (!result.focusedHeading || !result.focusedHeading.endsWith('-view-' + result.viewAfterClick + '-heading')) fail(width + ': focus did not move to the view heading');
+  if (result.viewAfterClick === result.viewAfterHydration) fail(label + ': clicking the view switcher did not change the view');
+  if (!result.focusedHeading || !result.focusedHeading.endsWith('-view-' + result.viewAfterClick + '-heading')) fail(label + ': focus did not move to the view heading');
   // Make sure the globe is active now, then assert the WebGL-less fallback.
   if (result.viewAfterClick !== 'globe') {
     const globeButton = [...section.querySelectorAll('.wanderer-views__button')].find((button) => button.textContent === 'Globe');
@@ -142,7 +162,7 @@ for (const width of [390, 1440]) {
   }
   const globe = section.querySelector('.wanderer-globe');
   result.globeFallback = globe ? { status: globe.getAttribute('data-wanderer-globe-status'), error: globe.getAttribute('data-wanderer-globe-error'), title: globe.querySelector('.wanderer-empty__title')?.textContent ?? null } : null;
-  if (!globe || result.globeFallback.status !== 'error' || result.globeFallback.error !== 'webgl') fail(width + ': globe fallback not shown without WebGL');
+  if (!globe || result.globeFallback.status !== 'error' || result.globeFallback.error !== 'webgl') fail(label + ': globe fallback not shown without WebGL');
   await act(async () => { root.unmount(); });
   window.close();
 }

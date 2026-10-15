@@ -7,10 +7,9 @@ import { Talks, useTalks } from '../src/index.js';
 import { globeView } from '../src/globe.js';
 import type { TalksProps, ViewChange } from '../src/component-types.js';
 import { click, installDom, keydown, setInputValue, type DomHandle } from './support/dom.js';
-import { loadReactDomClient } from './support/react.js';
-import { FIXTURE_TALKS, REFERENCE_DATE } from './support/fixtures.js';
+import { hydrate as hydrateChecked } from './support/react.js';
+import { FIXTURE_TALKS, REFERENCE_DATE, talk } from './support/fixtures.js';
 
-const { hydrateRoot } = await loadReactDomClient();
 
 type Change = [string, ViewChange];
 
@@ -34,8 +33,8 @@ afterEach(async () => {
 });
 
 /** Server-renders, hydrates, and collects recoverable errors and view changes. */
-async function hydrate(props: Partial<TalksProps>, options: { width?: number; prefersDark?: boolean } = {}): Promise<Mounted> {
-  const dom = installDom({ width: options.width ?? 390, prefersDark: options.prefersDark });
+async function hydrate(props: Partial<TalksProps>, options: { width?: number; prefersDark?: boolean; html?: string } = {}): Promise<Mounted> {
+  const dom = installDom({ width: options.width ?? 390, prefersDark: options.prefersDark, html: options.html });
   const changes: Change[] = [];
   const errors: string[] = [];
   let current: Partial<TalksProps> = props;
@@ -47,10 +46,9 @@ async function hydrate(props: Partial<TalksProps>, options: { width?: number; pr
   });
   const container = dom.document.getElementById('root')!;
   container.innerHTML = renderToString(element());
-  let root!: Root;
-  await act(async () => {
-    root = hydrateRoot(container, element(), { onRecoverableError: (error) => { errors.push(String(error)); } });
-  });
+  const hydrated = await hydrateChecked(container, element());
+  const root = hydrated.root;
+  errors.push(...hydrated.errors);
   const section = container.querySelector('.wanderer') as HTMLElement;
   const item: Mounted = {
     dom, root, section, errors, changes,
@@ -90,6 +88,40 @@ describe('hydration of the responsive layout', () => {
     assert.ok(html.includes('data-wanderer-breakpoint="900"'));
     assert.ok(html.includes('@media (min-width:900px)'));
     assert.ok(html.includes('@media (max-width:899.98px)'));
+    const style = /<style>([^<]*)<\/style>/.exec(html)![1];
+    assert.ok(!style.includes('&quot;') && style.includes('[data-wanderer-instance="'), 'the selector keeps real quotes');
+  });
+
+  test('a custom breakpoint hydrates cleanly and its inline rule hides the right shell before hydration', async () => {
+    const props = { ...responsiveProps(), responsive: { small: 'list', large: 'globe', breakpoint: 900 } };
+    const dom = installDom({ width: 1000 });
+    const container = dom.document.getElementById('root')!;
+    const element = () => createElement(Talks, { talks: FIXTURE_TALKS, referenceDate: REFERENCE_DATE, ...props });
+    container.innerHTML = renderToString(element());
+    const rules = [...container.querySelector('style')!.sheet!.cssRules] as CSSMediaRule[];
+    assert.deepEqual(rules.map((rule) => rule.conditionText), ['(min-width:900px)', '(max-width:899.98px)']);
+    const instance = container.querySelector('.wanderer')!.getAttribute('data-wanderer-instance')!;
+    for (const [rule, shell] of [[rules[0], 'small'], [rules[1], 'large']] as const) {
+      const selector = (rule.cssRules[0] as CSSStyleRule).selectorText;
+      assert.equal(container.querySelector(selector), container.querySelector(`[data-wanderer-instance="${instance}"] .wanderer-shell--${shell}`), `the ${shell} rule matches its shell`);
+    }
+    const { root, errors } = await hydrateChecked(container, element());
+    try {
+      assert.deepEqual(errors, []);
+      assert.equal(container.querySelector('.wanderer')!.getAttribute('data-wanderer-view'), 'globe', '1000px is at or above 900');
+      assert.equal(container.querySelector('style'), null, 'the rule goes once one shell is left');
+    } finally {
+      await act(async () => { root.unmount(); });
+      dom.cleanup();
+    }
+  });
+
+  test('a breakpoint that is not a positive number falls back to the default and emits no inline style', () => {
+    for (const breakpoint of ['900px</style><script>alert(1)</script>', Number.NaN, 0, -5]) {
+      const html = renderToString(createElement(Talks, { talks: FIXTURE_TALKS, referenceDate: REFERENCE_DATE, views: [globeView()], responsive: { small: 'list', large: 'globe', breakpoint: breakpoint as number } }));
+      assert.ok(html.includes('data-wanderer-breakpoint="1024"'), String(breakpoint));
+      assert.ok(!html.includes('<style') && !html.includes('<script'));
+    }
   });
 
   test('a breakpoint change switches the view with reason responsive while the user has not chosen', async () => {
@@ -142,9 +174,7 @@ describe('hydration of the responsive layout', () => {
     const serverList = container.querySelector('.wanderer-shell--large .wanderer-globe')!;
     serverInput.focus();
     assert.ok(dom.document.activeElement === serverInput, 'a visitor tabbed into the search box before JavaScript arrived');
-    const errors: string[] = [];
-    let root!: Root;
-    await act(async () => { root = hydrateRoot(container, element(), { onRecoverableError: (error) => errors.push(String(error)) }); });
+    const { root, errors } = await hydrateChecked(container, element());
     try {
       assert.deepEqual(errors, []);
       const section = container.querySelector('.wanderer')!;
@@ -366,6 +396,47 @@ describe('theme', () => {
     await act(async () => { dom.setPrefersDark(false); });
     assert.equal(section.querySelector('.scheme-probe')?.textContent, 'light');
   });
+
+  const hinted = (scheme: string) => `<!doctype html><html data-wanderer-scheme="${scheme}"><head></head><body><div id="root"></div></body></html>`;
+  const probe = (section: Element) => section.querySelector('.scheme-probe')?.textContent;
+
+  test('under system, a data-wanderer-scheme hint on <html> wins over the OS preference and is followed live', async () => {
+    const { dom, section, errors } = await hydrate({ theme: 'system', views: [schemeView], defaultView: 'scheme' }, { prefersDark: false, html: hinted('dark') });
+    assert.deepEqual(errors, []);
+    assert.equal(probe(section), 'dark', 'the hint is read after hydration');
+    const html = dom.document.documentElement;
+    await act(async () => { html.setAttribute('data-wanderer-scheme', 'light'); });
+    assert.equal(probe(section), 'light');
+    await act(async () => { dom.setPrefersDark(true); });
+    assert.equal(probe(section), 'light', 'the hint still wins over the OS');
+    await act(async () => { html.removeAttribute('data-wanderer-scheme'); });
+    assert.equal(probe(section), 'dark', 'without a hint the OS preference applies again');
+  });
+
+  test('a hint that appears after mount is followed, and the nearest hint wins', async () => {
+    const { dom, section } = await hydrate({ theme: 'system', views: [schemeView], defaultView: 'scheme' }, { prefersDark: false });
+    assert.equal(probe(section), 'light');
+    await act(async () => { dom.document.documentElement.setAttribute('data-wanderer-scheme', 'dark'); });
+    assert.equal(probe(section), 'dark', 'a host theme provider can set the hint after hydration');
+    const container = dom.document.getElementById('root')!;
+    await act(async () => { container.setAttribute('data-wanderer-scheme', 'light'); });
+    assert.equal(probe(section), 'light', 'a nearer ancestor overrides <html>');
+  });
+
+  test('the hint is honored after a strict validation error clears, and still followed after a second error', async () => {
+    const invalid = [talk({ id: 'ok' }), talk({ id: 'bad', date: 'nope' })];
+    const valid = [talk({ id: 'ok' })];
+    const item = await hydrate({ theme: 'system', validation: 'strict', talks: invalid, views: [schemeView], defaultView: 'scheme' }, { prefersDark: false, html: hinted('dark') });
+    assert.deepEqual(item.errors, []);
+    assert.ok(item.dom.document.querySelector('.wanderer--error'), 'mounted in the strict error state');
+    await item.rerender({ talks: valid });
+    const section = () => item.dom.document.querySelector('.wanderer')!;
+    assert.equal(probe(section()), 'dark', 'the root that replaced the alert reads the hint');
+    await item.rerender({ talks: invalid });
+    await item.rerender({ talks: valid });
+    await act(async () => { item.dom.document.documentElement.setAttribute('data-wanderer-scheme', 'light'); });
+    assert.equal(probe(section()), 'light', 'a later hint change is read from the current root, not a detached one');
+  });
 });
 
 describe('multiple instances', () => {
@@ -379,9 +450,7 @@ describe('multiple instances', () => {
     container.innerHTML = renderToString(page());
     const serverIds = [...container.querySelectorAll('[id]')].map((node) => node.id);
     assert.equal(new Set(serverIds).size, serverIds.length, `server markup has duplicate ids: ${serverIds.join(', ')}`);
-    const errors: string[] = [];
-    let root!: Root;
-    await act(async () => { root = hydrateRoot(container, page(), { onRecoverableError: (error) => errors.push(String(error)) }); });
+    const { root, errors } = await hydrateChecked(container, page());
     try {
       assert.deepEqual(errors, []);
       const sections = [...container.querySelectorAll<HTMLElement>('.wanderer')];

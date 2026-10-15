@@ -4,11 +4,12 @@ The component renders complete HTML on the server and hydrates without warnings.
 
 ## Hydration model
 
-- **Responsive shells.** With the `responsive` prop, the server does not know the viewport width. The HTML contains two shells, `.wanderer-shell--small` and `.wanderer-shell--large`, each with its own toolbar and view body. The stylesheet hides one per breakpoint (an inline instance-scoped `<style>` is added for a custom breakpoint). The first client render produces exactly the same tree, so hydration matches.
+- **Responsive shells.** With the `responsive` prop, the server does not know the viewport width. The HTML contains two shells, `.wanderer-shell--small` and `.wanderer-shell--large`, each with its own toolbar and view body (one `.wanderer-shell--active` when both breakpoints resolve to the same view). The stylesheet hides one per breakpoint (an inline instance-scoped `<style>` is added for a custom breakpoint), so the right shell shows before any script runs. The first client render produces exactly the same tree, so hydration matches.
 - **Media query via `useSyncExternalStore`.** `useMediaQuery` returns `undefined` for the server snapshot and during hydration, then the live match. When the value resolves, the component drops the inactive shell and renders one `.wanderer-shell--active`. The same hook powers `useColorScheme` and `usePrefersReducedMotion`; both report their defaults (`light`, `false`) until hydration completes.
 - **`suppressHydrationWarning` only on card dates.** Nothing in the library reads `window`, `Date`, `Math.random` or `matchMedia` during render. Client-only state is introduced after hydration through effects or `useSyncExternalStore`. Dates are formatted during render with `Intl.DateTimeFormat`, whose output depends on the runtime's ICU data, so a server and a browser on different ICU versions can disagree for some locales (current data abbreviates September as `Sept` in `en-GB`, older data as `Sep`). The card's `<time>` element and its margin month carry `suppressHydrationWarning`, so such a difference keeps the server's text instead of making React discard and re-render the tree.
 - **Ids.** All ids derive from React's `useId`, so server and client agree. The `data-wanderer-instance` attribute carries that id.
 - **Views receive `active={false}`** while both shells render. The globe uses this to defer loading until the viewport is measured.
+- **Server-side throws are contained.** Each view body and each custom renderer sits in a `<Suspense>` boundary, so one that throws during server rendering is left out of the HTML and rendered on the client instead of failing the page. React 18 can hydrate such a boundary ahead of an update only when the update is not urgent, and the render that follows hydration is urgent (the viewport and color scheme resolve through `useSyncExternalStore`). So views and the context provider keep the props they hydrated with until a deferred render right after it, and React 18 and 19 both keep the server HTML.
 - **Strict validation errors** render as a static `<section role="alert">` on the server too.
 
 Without `responsive`, one shell renders from the first pass and the only post-hydration change is the color scheme under `theme="system"`, which the CSS already handles.
@@ -19,12 +20,12 @@ Which modules carry `"use client"`:
 
 | Entry | Client modules | Pure modules |
 |---|---|---|
-| `@wanderer/talks` | `Talks`, `ListView`, `TalkCard`, `Toolbar`, `TalkLinkAnchor`, `resolveLinkPolicy`, `ErrorBoundary`, `useTalks`, every hook | helpers, `Heading`, `createDefaultCopy`, `mergeCopy`, `definePlugin`, `registerPlugins`, `collectContributions` |
+| `@wanderer/talks` | `Talks`, `ListView`, `TalkCard`, `Toolbar`, `TalkLinkAnchor`, `resolveLinkPolicy`, `ErrorBoundary`, `useTalks`, every hook | helpers (including `DEFAULT_BREAKPOINT`), `Heading`, `createDefaultCopy`, `mergeCopy`, `definePlugin`, `registerPlugins`, `collectContributions` |
 | `@wanderer/talks/list` | `ListView`, `TalkCard`, `Toolbar`, `TalkGroupSection`, `EmptyState`, `TalkLinkAnchor`, `resolveLinkPolicy` | `Heading` |
 | `@wanderer/talks/globe` | everything | type exports only |
 | `@wanderer/talks/helpers` | none | everything |
 
-`resolveLinkPolicy` is a plain function, but it lives in the same module as `TalkLinkAnchor`, which carries `"use client"`, so importing it into a Server Component makes it a client reference. Resolve policies in a client module.
+`resolveLinkPolicy` is a plain function, but it lives in the same module as `TalkLinkAnchor`, which carries `"use client"`, so importing it into a Server Component makes it a client reference. Resolve policies in a client module. `DEFAULT_BREAKPOINT` lives in the helpers module, so a Server Component can import it from either entry and compute with it.
 
 The build transpiles file by file, so each module's directive survives and bundlers that understand `"use client"` treat `Talks` as a client reference automatically. A Server Component may import and render `<Talks>` directly as long as every prop is serializable: `talks`, `referenceDate`, `copy` without function keys, `locale`, `dateFormat`, `direction`, `theme`, `tokens`, `density`, `headingLevel`, `viewHeadings`, `defaultView`, `enabledViews`, `responsive`, `defaultSearch`, `defaultFilters`, `builtinFilters`, `grouping`.
 

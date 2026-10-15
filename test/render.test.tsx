@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, test } from 'node:test';
+import { afterEach, before, beforeEach, describe, test } from 'node:test';
 import assert from './support/assert.js';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -24,7 +24,7 @@ interface SsrObservations {
 describe('server rendering without browser globals', () => {
   let observed: SsrObservations;
 
-  beforeEach(() => {
+  before(() => {
     const result = spawnSync(process.execPath, ['--import', 'tsx', path.join(here, 'support', 'ssr-child.ts')], {
       encoding: 'utf8',
       cwd: path.resolve(here, '..'),

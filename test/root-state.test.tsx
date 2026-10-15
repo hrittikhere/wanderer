@@ -11,6 +11,7 @@ import {
   type TalkRendererProps, type TalkViewProps, type TalksContext, type TalksPlugin,
 } from '../src/index.js';
 import * as listEntry from '../src/list.js';
+import * as helpersEntry from '../src/helpers.js';
 import { click, installDom, setInputValue } from './support/dom.js';
 import { loadReactDomClient } from './support/react.js';
 import { FIXTURE_TALKS, REFERENCE_DATE, talk } from './support/fixtures.js';
@@ -113,6 +114,7 @@ describe('registerPlugins', () => {
 describe('public pieces used directly', () => {
   test('DEFAULT_BREAKPOINT, listView options and the list entry', () => {
     assert.equal(DEFAULT_BREAKPOINT, 1024);
+    assert.equal(helpersEntry.DEFAULT_BREAKPOINT, 1024, 'the constant lives in the pure helpers module, so Server Components get the number');
     const view = listView({ label: 'Everything', heading: 'Every talk', order: 3 });
     assert.deepEqual([view.id, view.label, view.heading, view.order, view.Component], ['list', 'Everything', 'Every talk', 3, ListView]);
     assert.equal(listView().label, '', 'an empty label falls back to copy');

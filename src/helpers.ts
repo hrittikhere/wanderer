@@ -11,6 +11,12 @@ import { compareIds } from './ids.js';
 
 export { compareIds };
 
+/**
+ * The default responsive breakpoint in CSS pixels. Defined here, outside any
+ * `"use client"` module, so a Server Component that imports it gets the number.
+ */
+export const DEFAULT_BREAKPOINT = 1024;
+
 /** Reject overflow dates rather than allowing JavaScript's automatic normalization. */
 export function parseCalendarDate(value: unknown): Date | null {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;

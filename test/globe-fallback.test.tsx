@@ -1,18 +1,17 @@
 import { afterEach, describe, test } from 'node:test';
 import assert from './support/assert.js';
 import { act, createElement } from 'react';
-import type { Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { Talks } from '../src/index.js';
 import { GlobeRegionList, globeView, preloadGlobeView } from '../src/globe.js';
 import type { TalksContext } from '../src/component-types.js';
 import { deriveGeography } from '../src/helpers.js';
 import { click, installDom, type DomHandle } from './support/dom.js';
-import { loadReactDomClient } from './support/react.js';
+import { hydrate, loadReactDomClient } from './support/react.js';
 import { FIXTURE_TALKS, REFERENCE_DATE } from './support/fixtures.js';
 import { spyOnRendererImport } from './support/import-hooks.js';
 
-const { createRoot, hydrateRoot } = await loadReactDomClient();
+const { createRoot } = await loadReactDomClient();
 
 const cleanups: (() => Promise<void>)[] = [];
 // Run in reverse so roots unmount before their DOM globals disappear.
@@ -47,9 +46,7 @@ describe('GlobeView fallback without WebGL', () => {
     });
     container.innerHTML = renderToString(element());
     assert.ok(container.querySelector('[data-wanderer-globe-status="idle"]'), 'server markup renders the idle globe shell');
-    const errors: string[] = [];
-    let root!: Root;
-    await act(async () => { root = hydrateRoot(container, element(), { onRecoverableError: (error) => errors.push(String(error)) }); });
+    const { root, errors } = await hydrate(container, element());
     cleanups.push(async () => { await act(async () => { root.unmount(); }); dom.cleanup(); });
     assert.deepEqual(errors, []);
     const section = container.querySelector('.wanderer')!;

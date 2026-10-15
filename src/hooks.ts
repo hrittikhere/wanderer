@@ -43,22 +43,26 @@ function readHostScheme(element: Element | null): ColorScheme | null {
 
 /**
  * Resolves the color scheme the stylesheet will use. Explicit themes win.
- * For `system`, an ancestor `data-wanderer-scheme` host hint wins over the
- * operating-system preference, mirroring styles.css. Light during SSR and the
- * first hydration render; the real value arrives from an effect.
+ * For `system`, the nearest ancestor `data-wanderer-scheme` host hint wins
+ * over the operating-system preference, mirroring styles.css. Without
+ * `rootRef` (or before it is attached) the hint on `<html>` applies. Hints
+ * added, changed or removed after mount are followed. Light during SSR and
+ * the first hydration render; the real value arrives from an effect.
  */
 export function useColorScheme(theme: Theme, rootRef?: RefObject<Element | null>): ColorScheme {
   const prefersDark = useMediaQuery(theme === 'system' ? '(prefers-color-scheme: dark)' : null);
   const [hostScheme, setHostScheme] = useState<ColorScheme | null>(null);
   useEffect(() => {
-    if (theme !== 'system' || typeof MutationObserver === 'undefined') return;
-    const element = rootRef?.current ?? null;
-    const sync = () => setHostScheme(readHostScheme(element));
+    if (theme !== 'system' || typeof document === 'undefined') return;
+    // The element is read on every check, not once: the root can be replaced
+    // without this effect re-running (Talks swaps it when a strict error clears).
+    const sync = () => setHostScheme(readHostScheme(rootRef?.current ?? document.documentElement));
     sync();
-    const host = element?.closest('[data-wanderer-scheme]');
-    if (!host) return;
+    if (typeof MutationObserver === 'undefined') return;
+    // The whole document, so a hint that appears after mount, or on another
+    // ancestor than the one present at mount, is picked up as well.
     const observer = new MutationObserver(sync);
-    observer.observe(host, { attributes: true, attributeFilter: ['data-wanderer-scheme'] });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-wanderer-scheme'], subtree: true });
     return () => observer.disconnect();
   }, [theme, rootRef]);
   if (theme !== 'system') return theme;

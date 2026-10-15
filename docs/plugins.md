@@ -80,7 +80,7 @@ interface TalkViewProps {
 }
 ```
 
-The view component renders the body only. `Talks` renders the toolbar and the heading, wraps the body in an error boundary (fallback: `copy.pluginError`) and resets that boundary when the view changes. On the server React does not run error boundaries, so the body also sits in a `<Suspense>` boundary: a view that throws during server rendering leaves an empty placeholder and is rendered again on the client, where the error boundary applies. The body is memoized on `context`, so the render that only updates the search field after a keystroke skips it.
+The view component renders the body only. `Talks` renders the toolbar and the heading, wraps the body in an error boundary (fallback: `copy.pluginError`) and resets that boundary when the view changes. On the server React does not run error boundaries, so the body also sits in a `<Suspense>` boundary: a view that throws during server rendering leaves an empty placeholder and is rendered again on the client, where the error boundary applies. The body is memoized on `context`, so the render that only updates the search field after a keystroke skips it. Right after hydration the body receives the resolved context (viewport, color scheme, `active`) in a deferred render rather than the urgent one, which lets React 18 hydrate the boundary first; see [SSR](ssr.md#hydration-model).
 
 ### FilterContribution
 

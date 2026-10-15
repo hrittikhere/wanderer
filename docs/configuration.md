@@ -104,8 +104,8 @@ The context exposes `setView(id, reason?)`, `setSearch`, `setFilters`, `toggleFi
 
 With `responsive` set:
 
-- On the server and during the first hydration render, the viewport width is unknown. The component renders two shells, `.wanderer-shell--small` and `.wanderer-shell--large`, each with its own toolbar and view. The root carries `data-wanderer-breakpoint`, `data-wanderer-view-small` and `data-wanderer-view-large`, and `data-wanderer-view` is absent.
-- The stylesheet hides one shell per breakpoint for the default 1024 pixel breakpoint. For a custom breakpoint the component emits a small inline `<style>` scoped to the instance.
+- On the server and during the first hydration render, the viewport width is unknown. The component renders two shells, `.wanderer-shell--small` and `.wanderer-shell--large`, each with its own toolbar and view. The root carries `data-wanderer-breakpoint`, `data-wanderer-view-small` and `data-wanderer-view-large`, and `data-wanderer-view` is absent. When `small` and `large` resolve to the same view (the same id, or two ids that both fall back to the first registered view), a single `.wanderer-shell--active` renders instead, so ids stay unique.
+- The stylesheet hides one shell per breakpoint for the default 1024 pixel breakpoint. For a custom breakpoint the component emits a small inline `<style>` scoped to the instance. A `breakpoint` that is not a positive number (a string from untyped configuration, `NaN`, `0`) falls back to 1024.
 - Views receive `active={false}` while both shells render, so the globe does not start loading until the viewport is measured.
 - After measurement a single `.wanderer-shell--active` remains and `data-wanderer-view` is set.
 - The media query is watched. Crossing the breakpoint changes the view with reason `responsive` only while the user has not chosen a view. An explicit choice is kept across breakpoint changes for the life of the instance.

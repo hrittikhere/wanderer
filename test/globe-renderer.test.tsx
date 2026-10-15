@@ -142,6 +142,40 @@ describe('the WebGL renderer under a fake GL context', () => {
     assert.equal(perFrame(), 0, 'no frames render while hidden');
   });
 
+  test('scrolling the stage offscreen pauses rendering and scrolling back resumes one chain', async () => {
+    const item = await mountGlobe();
+    const { gl, dom } = item;
+    await item.frame();
+    const perFrame = () => { const before = gl.clears; gl.frames.flush(); return gl.clears - before; };
+    assert.ok(dom.observed('intersection').includes(item.stage), 'the stage is watched for visibility');
+    await act(async () => { dom.intersect(item.stage, false); });
+    assert.equal(item.stage.getAttribute('data-wanderer-paused'), 'true');
+    await item.frame();
+    assert.equal(perFrame(), 0, 'no frames render offscreen');
+    await act(async () => { dom.intersect(item.stage, true); });
+    assert.equal(item.stage.hasAttribute('data-wanderer-paused'), false);
+    await item.frame();
+    assert.equal(perFrame(), 1);
+    await act(async () => { item.root.unmount(); });
+    assert.deepEqual(dom.observed('intersection'), [], 'unmounting disconnects the observer');
+    assert.deepEqual(dom.observed('resize'), []);
+  });
+
+  test('a resized scene resizes the drawing buffer', async () => {
+    const item = await mountGlobe();
+    const { gl, dom } = item;
+    const scene = item.globe.querySelector<HTMLElement>('.wanderer-globe__scene')!;
+    assert.ok(dom.observed('resize').includes(scene), 'the scene is watched for size changes');
+    await act(async () => { dom.resize(scene, 320, 320); });
+    await item.frame();
+    await item.frame();
+    assert.deepEqual(gl.uniforms.get('w'), [320, 320]);
+    await act(async () => { dom.resize(scene, 480, 480); });
+    await item.frame();
+    await item.frame();
+    assert.deepEqual(gl.uniforms.get('w'), [480, 480]);
+  });
+
   test('a lost WebGL context pauses rendering and a restored one rebuilds the globe', async () => {
     const item = await mountGlobe({ milestones: [LISBON] });
     const { gl, dom } = item;

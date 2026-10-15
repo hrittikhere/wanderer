@@ -14,7 +14,7 @@ import { TalksReactContext } from '../context.js';
 import { restrictGeography } from '../geography.js';
 import { mergeCopy } from '../copy.js';
 import {
-  DEFAULT_PRIMARY_LINK_PRECEDENCE, deriveGeography, filterTalks, formatCalendarDate, getPrimaryLink,
+  DEFAULT_BREAKPOINT, DEFAULT_PRIMARY_LINK_PRECEDENCE, deriveGeography, filterTalks, formatCalendarDate, getPrimaryLink,
   getTalkLinks, groupTalks, isUpcoming, normalizeSearch, validateTalks,
 } from '../helpers.js';
 import { useColorScheme, useControllable, useIsClient, useMediaQuery, useShallowStable } from '../hooks.js';
@@ -27,8 +27,15 @@ import { TalkLinkAnchor } from './TalkLink.js';
 import { Toolbar } from './Toolbar.js';
 import { ViewShell } from './ViewShell.js';
 
-export const DEFAULT_BREAKPOINT = 1024;
 const RESERVED_VIEW_IDS = ['list', 'globe'] as const;
+
+/**
+ * A positive, finite breakpoint, or DEFAULT_BREAKPOINT for anything else (a
+ * string from untyped config, NaN, 0). The value goes into an inline <style>.
+ */
+function resolveBreakpoint(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : DEFAULT_BREAKPOINT;
+}
 const BUILTIN_FILTER_IDS: readonly BuiltinFilterId[] = ['recording', 'upcoming', 'online', 'in-person', 'hybrid'];
 const RESERVED_ACTION_IDS = ['event', 'recording', 'slides', 'detail', 'general'] as const;
 const DEFAULT_DATE_FORMAT: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
@@ -74,10 +81,18 @@ function Announcement({ text }: { text: string }) {
 /**
  * The view body. Memoized so the urgent render of a keystroke, which only
  * updates the field, skips the view; it re-renders once the deferred results
- * produce a new context.
+ * produce a new context. The Suspense boundary makes a view that throws during
+ * server rendering fall back to client rendering. It sits inside the memo so
+ * a render with unchanged props does not hand the boundary a new element,
+ * which React 18 treats as an update to a boundary that may still be
+ * dehydrated.
  */
 const ViewBody = memo(function ViewBody({ Component, ...props }: TalkViewProps & { Component: ComponentType<TalkViewProps> }) {
-  return <Component {...props} />;
+  return (
+    <Suspense fallback={null}>
+      <Component {...props} />
+    </Suspense>
+  );
 });
 
 function DefaultImage({ src, alt, width, height, loading, decoding, sizes, className }: ImageComponentProps) {
@@ -253,7 +268,7 @@ export function Talks(props: TalksProps) {
   viewIdsRef.current = viewIds;
 
   // View state: controlled > explicit user choice > responsive default > fixed default.
-  const breakpoint = responsive?.breakpoint ?? DEFAULT_BREAKPOINT;
+  const breakpoint = resolveBreakpoint(responsive?.breakpoint);
   const isLarge = useMediaQuery(responsive ? `(min-width: ${breakpoint}px)` : null);
   const [userView, setUserView] = useState<string | undefined>(undefined);
   // The view each breakpoint would show once a missing id falls back to the first view.
@@ -554,6 +569,18 @@ export function Talks(props: TalksProps) {
   ]);
   contextRef.current = context;
 
+  // A Suspense boundary around each view contains server-side throws. React 18
+  // hydrates such a boundary ahead of an update only when the update is not
+  // urgent, and the first client render after hydration is urgent
+  // (useSyncExternalStore resolves the viewport and color scheme
+  // synchronously). So until a deferred render after hydration, the boundaries
+  // and the context provider keep what they hydrated with; otherwise React 18
+  // would discard their server HTML and report a recoverable error.
+  const settled = useDeferredValue(isClient);
+  const live = { context, pending, fullscreenAllowed };
+  const hydrated = useDeferredValue(settled ? null : live);
+  const boundary = settled || !hydrated ? live : hydrated;
+
   // Keyboard: Escape returns to the list when focus is inside the component.
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!escapeToList || event.key !== 'Escape' || event.defaultPrevented) return;
@@ -605,6 +632,7 @@ export function Talks(props: TalksProps) {
   if (showsValidationError) {
     return (
       <section
+        ref={rootRef}
         className={`wanderer wanderer--error${className ? ` ${className}` : ''}`}
         data-wanderer-theme={theme}
         data-wanderer-instance={instanceId}
@@ -647,7 +675,7 @@ export function Talks(props: TalksProps) {
     : null;
 
   return (
-    <TalksReactContext.Provider value={context}>
+    <TalksReactContext.Provider value={boundary.context}>
       <section
         ref={rootRef}
         className={`wanderer${className ? ` ${className}` : ''}`}
@@ -664,13 +692,17 @@ export function Talks(props: TalksProps) {
         onKeyDown={handleKeyDown}
         onWheel={trackpadGestures ? handleWheel : undefined}
       >
-        {customBreakpointStyle && <style>{customBreakpointStyle}</style>}
+        {/* Raw HTML, not a text child: React 18's server renderer escapes the
+            quotes in a <style> text child, which breaks the selector and hydration.
+            The content is built only from a number and a useId id. */}
+        {customBreakpointStyle && <style dangerouslySetInnerHTML={{ __html: customBreakpointStyle }} />}
         {shells.map((shell) => {
           const view = registry.views.find((item) => item.id === shell.view);
           const headingId = shell.view ? viewHeadingId(shell.view) : undefined;
           const exitView = registry.views.find((item) => item.id !== view?.id && item.presentation !== 'immersive');
           const exit = () => { if (exitView) setView(exitView.id, 'user'); };
           const immersive = fullscreenAllowed && view?.presentation === 'immersive' && !!exitView;
+          const immersiveBody = boundary.fullscreenAllowed && view?.presentation === 'immersive' && !!exitView;
           return (
             <ViewShell
               key={shell.key}
@@ -698,17 +730,14 @@ export function Talks(props: TalksProps) {
                     resetKey={view.id}
                     fallback={<p className="wanderer-error" role="alert">{copy.pluginError}</p>}
                   >
-                    {/* A view that throws during server rendering falls back to client rendering. */}
-                    <Suspense fallback={null}>
-                      <ViewBody
-                        Component={view.Component}
-                        context={context}
-                        active={!pending}
-                        headingId={headingId}
-                        viewId={view.id}
-                        presentation={immersive ? 'immersive' : 'inline'}
-                      />
-                    </Suspense>
+                    <ViewBody
+                      Component={view.Component}
+                      context={boundary.context}
+                      active={!boundary.pending}
+                      headingId={headingId}
+                      viewId={view.id}
+                      presentation={immersiveBody ? 'immersive' : 'inline'}
+                    />
                   </ErrorBoundary>
                 </div>
               )}
