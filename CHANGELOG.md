@@ -26,6 +26,11 @@
 - Search and filter changes filter the list in a deferred render, so typing stays responsive with long lists. Refilling an emptied globe remounts the loaded renderer without a loading pass.
 - Stylesheet: the search field border reaches 3:1 contrast (new `--wanderer-input-border` token); text fields stay at 16px on touch devices so iOS does not zoom; the full-photo link meets the 44px touch target; the nearest `data-wanderer-scheme` hint wins when hints are nested; milestone dots stay on their markers in RTL; long location and region names wrap; the beside callout no longer covers the globe controls; the Dismiss focus ring is not clipped; the RTL callout entrance follows the component's direction; every transition follows `--wanderer-easing`.
 - The globe stage and its controls precede the location panel in the DOM, so focus order matches the layout at every width (wide layouts place the panel in the first column with CSS grid).
+- Fullscreen follows the browser: when the browser closes the dialog itself (repeated Escape with `escapeToList={false}` or an `isModalOpen` veto, the Android back gesture), the component returns to the inline view instead of hiding everything; a controlled parent that declines gets the dialog back.
+- Fullscreen opens only for a view the visitor or the consumer chose, and only after hydration: an immersive view that is the `responsive` default, on load or after a breakpoint crossing, shows inline (and is visible in the server HTML); choosing it opens fullscreen. `TalkViewProps.presentation` and the `wanderer-globe--inline`/`--immersive` modifier report the presentation in effect.
+- Escape is held back only by text fields that have text, and clears only the component's own search field (including a text-type `SearchInput` slot); checkboxes and ranges no longer swallow it, and a plugin's own search field no longer clears the component's search.
+- Choosing the view that is already shown no longer leaves a focus request that a later controlled change would act on.
+- The fullscreen scroll lock also covers hosts that scroll `body`, and the shell stacks at `--wanderer-z-overlay` where `showModal()` is unavailable.
 
 All notable changes to `@wanderer/talks` are recorded here. The format follows Keep a Changelog, and the project follows Semantic Versioning.
 

@@ -1216,6 +1216,8 @@
 .wanderer-shell--immersive {
   position: fixed;
   inset: 0;
+  /* Inert in the top layer; stacks above the page when showModal() is missing and only [open] is set. */
+  z-index: var(--wanderer-z-overlay);
   margin: 0;
   padding: clamp(1rem, 3vw, 2rem);
   inline-size: 100%;
@@ -1232,7 +1234,9 @@
 .wanderer-shell--immersive:not([open]) { display: none; }
 .wanderer-shell--immersive::backdrop { background: var(--wanderer-backdrop); }
 .wanderer-shell__close { align-self: end; }
-html:has(.wanderer-shell--immersive[open]) { overflow: hidden; }
+/* The document scroller is html in most layouts and body when a host makes body scroll. */
+html:has(.wanderer-shell--immersive[open]),
+html:has(.wanderer-shell--immersive[open]) body { overflow: hidden; }
 
 .wanderer-shell--immersive .wanderer-globe__stage {
   inline-size: min(100%, 60vh, var(--wanderer-globe-max-size));

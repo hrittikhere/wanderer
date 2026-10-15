@@ -318,7 +318,7 @@ interface GlobeViewComponentProps extends TalkViewProps {
   options: GlobeViewOptions;
 }
 
-export function GlobeView({ context, active, options }: GlobeViewComponentProps) {
+export function GlobeView({ context, active, options, presentation: shellPresentation }: GlobeViewComponentProps) {
   const isClient = useIsClient();
   const reducedMotion = usePrefersReducedMotion();
   const documentVisible = useDocumentVisible();
@@ -334,7 +334,8 @@ export function GlobeView({ context, active, options }: GlobeViewComponentProps)
   const automatic = !motionPaused && !reducedMotion;
   const [expandedMarker, setExpandedMarker] = useState<string | null>(null);
   const colors = useGlobeColors(stageRef, colorScheme, theme);
-  const presentation = options.presentation ?? 'inline';
+  // The presentation the shell actually uses, which is inline whenever fullscreen is not open.
+  const presentation = shellPresentation ?? options.presentation ?? 'inline';
   const headingId = useId();
 
   const hasMarkers = geography.markers.length > 0;

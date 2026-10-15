@@ -157,6 +157,9 @@ import { useSyncExternalStore } from 'react';
 import { Talks, type ImageComponentProps, type LinkComponentProps, type Talk, type Theme } from '@wanderer/talks';
 import { globeView } from '@wanderer/talks/globe';
 
+// With `responsive` below, desktop visitors start on the globe inline (it is
+// server-rendered and visible before hydration); choosing it in the view
+// switcher opens it fullscreen.
 const views = [globeView({ presentation: 'immersive' })];
 
 function NextLink({ href, children, ...rest }: LinkComponentProps) {

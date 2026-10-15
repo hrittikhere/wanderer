@@ -186,6 +186,12 @@ export interface TalkViewProps {
   active: boolean;
   headingId: string;
   viewId: string;
+  /**
+   * How the shell presents the view right now. `immersive` only inside the
+   * fullscreen dialog: an immersive view shows inline before hydration, for
+   * the responsive default, and without an inline view to exit to.
+   */
+  presentation?: 'inline' | 'immersive';
 }
 
 export interface ViewContribution {
@@ -194,7 +200,11 @@ export interface ViewContribution {
   /** Empty strings fall back to copy for the reserved `list` and `globe` ids. */
   label: string;
   heading?: string;
-  /** Fullscreen dialog, including the toolbar. Falls back to inline without an exit view. */
+  /**
+   * Fullscreen dialog, including the toolbar, once the visitor or the consumer
+   * chooses the view. Shown inline before hydration, when it is only the
+   * responsive default, and without an inline view to exit to.
+   */
   presentation?: 'inline' | 'immersive';
   icon?: ReactNode;
   Component: ComponentType<TalkViewProps>;

@@ -17,7 +17,7 @@ import {
   DEFAULT_PRIMARY_LINK_PRECEDENCE, deriveGeography, filterTalks, formatCalendarDate, getPrimaryLink,
   getTalkLinks, groupTalks, isUpcoming, validateTalks,
 } from '../helpers.js';
-import { useColorScheme, useControllable, useMediaQuery } from '../hooks.js';
+import { useColorScheme, useControllable, useIsClient, useMediaQuery } from '../hooks.js';
 import { collectContributions, registerPlugins } from '../plugins.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
 import { Heading } from './Heading.js';
@@ -36,6 +36,17 @@ const TRACKPAD_TOGGLE_DISTANCE = 110;
 const TRACKPAD_MIN_DELTA = 4;
 const TRACKPAD_COOLDOWN_MS = 700;
 const ANNOUNCE_DELAY_MS = 600;
+/** Input types that hold text the visitor edits; Escape in one with text belongs to the field. */
+const TEXT_ENTRY_TYPES = new Set(['text', 'search', 'email', 'url', 'tel', 'password', 'number']);
+
+/** The text of an editable field, or null when the target is not one (checkboxes, ranges and buttons have values too). */
+function editableText(target: EventTarget | null): string | null {
+  const element = target as HTMLElement | null;
+  if (!element || typeof element.tagName !== 'string') return null;
+  if (element.tagName === 'TEXTAREA') return (element as HTMLTextAreaElement).value;
+  if (element.tagName === 'INPUT') return TEXT_ENTRY_TYPES.has((element as HTMLInputElement).type) ? (element as HTMLInputElement).value : null;
+  return element.isContentEditable ? element.textContent ?? '' : null;
+}
 
 function DefaultImage({ src, alt, width, height, loading, decoding, sizes, className }: ImageComponentProps) {
   return (
@@ -210,6 +221,15 @@ export function Talks(props: TalksProps) {
   } else candidate = defaultView ?? viewIds[0];
   const candidateAvailable = candidate !== undefined && viewIds.includes(candidate);
   const activeView = pending ? undefined : candidateAvailable ? candidate : viewIds[0];
+  const activeViewRef = useRef(activeView);
+  activeViewRef.current = activeView;
+  // Fullscreen opens for a view the visitor or the consumer chose (a click,
+  // the `view` prop, a fixed `defaultView`), never for the responsive pick on
+  // load or on a breakpoint crossing, and only after hydration: the server
+  // HTML and the first client render show every view inline.
+  const isClient = useIsClient();
+  const fullscreenAllowed = isClient && candidateAvailable
+    && (controlledView !== undefined || userView !== undefined || !responsive);
 
   const reasonRef = useRef<ViewChangeReason | null>(null);
   const previousViewRef = useRef<string | undefined>(undefined);
@@ -276,6 +296,13 @@ export function Talks(props: TalksProps) {
 
   const setView = useCallback((next: string, reason: ViewChangeReason = 'user') => {
     if (!viewIdsRef.current.includes(next)) return;
+    if (next === activeViewRef.current) {
+      // Already shown: no change to report and no focus to move. Choosing it
+      // again still makes it the visitor's choice, so an immersive view the
+      // responsive default showed inline opens fullscreen.
+      if (reason === 'user' && controlledView === undefined) setUserView(next);
+      return;
+    }
     reasonRef.current = reason;
     if (reason === 'user') focusRequestRef.current = { view: next, source: document.activeElement };
     if (controlledView === undefined) {
@@ -461,11 +488,12 @@ export function Talks(props: TalksProps) {
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!escapeToList || event.key !== 'Escape' || event.defaultPrevented) return;
     if (isModalOpen?.()) return;
-    const target = event.target as HTMLElement | null;
-    if (target instanceof HTMLInputElement && target.value) {
-      // Prevent the dialog's native cancel action while search is being cleared.
+    if (editableText(event.target)) {
+      // A text field with text keeps Escape, and a fullscreen dialog stays
+      // open. Only the component's own search field (built in or the
+      // SearchInput slot) is cleared; a plugin's field handles Escape itself.
       event.preventDefault();
-      if (target.type === 'search') setSearch('');
+      if ((event.target as Element).closest('.wanderer-toolbar__search')) setSearch('');
       return;
     }
     if (activeView === 'list' || !viewIds.includes('list')) return;
@@ -566,10 +594,11 @@ export function Talks(props: TalksProps) {
           const headingId = shell.view ? viewHeadingId(shell.view) : undefined;
           const exitView = registry.views.find((item) => item.id !== view?.id && item.presentation !== 'immersive');
           const exit = () => { if (exitView) setView(exitView.id, 'user'); };
+          const immersive = fullscreenAllowed && view?.presentation === 'immersive' && !!exitView;
           return (
             <ViewShell
               key={shell.key}
-              immersive={view?.presentation === 'immersive' && !!exitView}
+              immersive={immersive}
               active={!pending}
               headingId={headingId}
               className={`wanderer-shell ${shell.modifier}`}
@@ -593,7 +622,13 @@ export function Talks(props: TalksProps) {
                     resetKey={view.id}
                     fallback={<p className="wanderer-error" role="alert">{copy.pluginError}</p>}
                   >
-                    <view.Component context={context} active={!pending} headingId={headingId} viewId={view.id} />
+                    <view.Component
+                      context={context}
+                      active={!pending}
+                      headingId={headingId}
+                      viewId={view.id}
+                      presentation={immersive ? 'immersive' : 'inline'}
+                    />
                   </ErrorBoundary>
                 </div>
               )}

@@ -76,6 +76,7 @@ interface TalkViewProps {
   active: boolean;   // false while both responsive shells render before hydration
   headingId: string; // id of the heading Talks renders above the view
   viewId: string;
+  presentation?: 'inline' | 'immersive'; // the presentation in effect: immersive only inside the fullscreen dialog
 }
 ```
 
@@ -163,7 +164,7 @@ interface GlobeOverlayCardProps { milestone: Milestone; context: TalksContext; }
 interface GlobeAsideProps { context: TalksContext; geography: Geography; }
 ```
 
-`SearchInput` replaces the whole built-in search field, including its clear button. `GlobeOverlayCard` replaces the milestone callout that appears when the renderer activates a milestone. `GlobeAside` renders inside the globe panel below the region and location lists. `GlobeStageOverlay` renders in a `<div class="wanderer-globe__overlay">` inside `.wanderer-globe__stage-wrap`, layered over the stage and its hint. The overlay is absolutely positioned over the whole stage area with `pointer-events: none`; its direct children get `pointer-events: auto`, so position your own content and it stays clickable. It receives the same props as `GlobeAside`.
+`SearchInput` replaces the whole built-in search field, including its clear button. Any text input it renders (`type="search"`, `"text"` and so on) behaves like the built-in one on Escape: the first press clears the search, the next one returns to the list. A text field inside a plugin view keeps Escape while it has text and is never cleared by the component; handle Escape in its own `onKeyDown` if it should clear. `GlobeOverlayCard` replaces the milestone callout that appears when the renderer activates a milestone. `GlobeAside` renders inside the globe panel below the region and location lists. `GlobeStageOverlay` renders in a `<div class="wanderer-globe__overlay">` inside `.wanderer-globe__stage-wrap`, layered over the stage and its hint. The overlay is absolutely positioned over the whole stage area with `pointer-events: none`; its direct children get `pointer-events: auto`, so position your own content and it stays clickable. It receives the same props as `GlobeAside`.
 
 ## The context
 
