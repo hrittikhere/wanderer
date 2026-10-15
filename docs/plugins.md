@@ -65,7 +65,7 @@ interface ViewContribution {
   order?: number;
   label: string;            // toggle button text; '' falls back to copy for `list` and `globe`
   presentation?: 'inline' | 'immersive'; // fullscreen includes the toolbar and heading
-  heading?: string;         // rendered by Talks above the view; defaults to the label
+  heading?: string;         // rendered by Talks above the view; defaults to the label (copy.listHeading / copy.globeHeading for `list` and `globe`)
   icon?: ReactNode;         // drawn before the label in the toggle
   Component: ComponentType<TalkViewProps>;
   preload?: () => Promise<unknown>;  // called on pointer enter and focus of the toggle
@@ -151,7 +151,7 @@ interface TalksSlots {
 }
 
 interface SearchSlotProps {
-  id: string;                 // use it on the input so the shell's label association works
+  id: string;                 // unique per instance and shell; put it on the input and on your own <label htmlFor> (the shell renders no label for a slot)
   value: string;
   onChange: (value: string) => void;
   label: string;              // copy.searchLabel
@@ -164,7 +164,7 @@ interface GlobeOverlayCardProps { milestone: Milestone; context: TalksContext; }
 interface GlobeAsideProps { context: TalksContext; geography: Geography; }
 ```
 
-`SearchInput` replaces the whole built-in search field, including its clear button. Any text input it renders (`type="search"`, `"text"` and so on) behaves like the built-in one on Escape: the first press clears the search, the next one returns to the list. A text field inside a plugin view keeps Escape while it has text and is never cleared by the component; handle Escape in its own `onKeyDown` if it should clear. `GlobeOverlayCard` replaces the milestone callout that appears when the renderer activates a milestone. `GlobeAside` renders inside the globe panel below the region and location lists. `GlobeStageOverlay` renders in a `<div class="wanderer-globe__overlay">` inside `.wanderer-globe__stage-wrap`, layered over the stage and its hint. The overlay is absolutely positioned over the whole stage area with `pointer-events: none`; its direct children get `pointer-events: auto`, so position your own content and it stays clickable. It receives the same props as `GlobeAside`.
+`SearchInput` replaces the whole built-in search field, including its clear button. Any text input it renders (`type="search"`, `"text"` and so on) behaves like the built-in one on Escape: the first press clears the search, the next one returns to the list. A text field inside a plugin view keeps Escape while it has text and is never cleared by the component; handle Escape in its own `onKeyDown` if it should clear. `GlobeOverlayCard` replaces the card inside the milestone callout that appears when the renderer activates a milestone; the callout wrapper and its Dismiss button stay, so do not add a close control of your own. `GlobeAside` renders inside the globe panel below the region and location lists. `GlobeStageOverlay` renders in a `<div class="wanderer-globe__overlay">` inside `.wanderer-globe__stage-wrap`, layered over the stage and its hint. The overlay is absolutely positioned over the whole stage area with `pointer-events: none`; its direct children get `pointer-events: auto`, so position your own content and it stays clickable. It receives the same props as `GlobeAside`.
 
 ## The context
 
@@ -180,7 +180,7 @@ Useful members:
 | `search`, `setSearch`, `filters`, `setFilters`, `toggleFilter`, `availableFilters`, `hasActiveFilters`, `resetAll` | Search and filter state. `search`, `filters` and `hasActiveFilters` describe the applied results and can trail the field by one render while a long list updates; the setters always apply to the latest value and accept a function of it. |
 | `getLinks(talk)`, `getPrimaryLink(talk)`, `getActions(talk)`, `renderLink(link, children, talk?, props?)` | The link model, honoring the navigation options. |
 | `renderTalk(talk, group?)` | Renders a talk through the renderer resolution. |
-| `copy`, `locale`, `dateFormat`, `direction`, `theme`, `colorScheme`, `breakpoint`, `density`, `headingLevel`, `grouping` | Presentation settings. `colorScheme` is `light` on the server and during hydration when `theme` is `system`; after hydration it honors an ancestor `data-wanderer-scheme` hint, then `prefers-color-scheme`. `breakpoint` is the responsive breakpoint in CSS pixels (`DEFAULT_BREAKPOINT`, 1024, without `responsive`); match it in a custom view with `useMediaQuery(`(min-width: ${context.breakpoint}px)`)`, as the globe does for its connector lines. |
+| `copy`, `locale`, `dateFormat`, `direction`, `theme`, `colorScheme`, `breakpoint`, `density`, `headingLevel`, `grouping` | Presentation settings. `colorScheme` is `light` on the server and during hydration when `theme` is `system`; after hydration it honors an ancestor `data-wanderer-scheme` hint, then `prefers-color-scheme`. `breakpoint` is the responsive breakpoint in CSS pixels (`DEFAULT_BREAKPOINT`, 1024, without `responsive`); match the shells in a custom view with ``useMediaQuery(`(min-width: ${context.breakpoint}px)`)``. The globe's milestone callout and connector lines do not follow it: they depend on the measured space beside the stage (`data-wanderer-callout`). |
 | `instanceId`, `milestones`, `ImageComponent`, `slots`, `navigation`, `geographyOptions`, `validation` | Instance data. |
 
 ## State and cleanup

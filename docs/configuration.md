@@ -61,13 +61,13 @@ An active id that no offered filter matches (a built-in left out of `builtinFilt
 | `locale` | `string` | `'en-US'` | Passed to `Intl.DateTimeFormat` for card dates, year group headings and the globe's Latest year. See [Localization](#localization). |
 | `dateFormat` | `Intl.DateTimeFormatOptions` | `{ year: 'numeric', month: 'short', day: 'numeric' }` | Format of the full date on a talk card. Always formatted in UTC. The bare `formatCalendarDate` helper defaults to `month: 'long'` instead. |
 | `direction` | `'ltr' \| 'rtl'` | `'ltr'` | Sets `dir` on the root. Layout uses logical properties. |
-| `theme` | `'light' \| 'dark' \| 'system'` | `'system'` | Sets `data-wanderer-theme` on the root. `system` is light on the server and during hydration. After hydration it follows an ancestor `data-wanderer-scheme` hint when one exists, otherwise `prefers-color-scheme`. See [styling.md](styling.md#dark-mode). |
+| `theme` | `'light' \| 'dark' \| 'system'` | `'system'` | Sets `data-wanderer-theme` on the root. Under `system` the stylesheet paints from the start: an ancestor `data-wanderer-scheme` hint, otherwise `prefers-color-scheme`, so server HTML is already dark on a dark OS. Only `context.colorScheme` reads `light` on the server and during hydration; after hydration it follows the same hint, then `prefers-color-scheme`. See [styling.md](styling.md#dark-mode). |
 | `tokens` | `ThemeTokens` | `undefined` | Inline `--wanderer-*` custom properties on the root. Numbers are written without a unit, so give lengths as strings (`'1.5rem'`). See [styling.md](styling.md#tokens). |
 | `className` | `string` | `undefined` | Appended to the root `class` after `wanderer`. |
 | `style` | `CSSProperties` | `undefined` | Inline style on the root, merged after `tokens` so it wins on a collision. |
 | `density` | `'comfortable' \| 'compact'` | `'comfortable'` | Sets `data-wanderer-density`. `compact` hides talk descriptions, tightens card padding and shrinks the title. |
 | `headingLevel` | `1 \| 2 \| 3 \| 4` | `2` | Level of the view headings. Group headings, the globe panel heading and the globe section headings use the next level. Talk titles use two levels down. Levels clamp to `h6`. |
-| `viewHeadings` | `'visible' \| 'visually-hidden'` | `'visible'` | `visually-hidden` keeps the view headings in the DOM as focus targets and shows them only while focused. |
+| `viewHeadings` | `'visible' \| 'visually-hidden'` | `'visible'` | `visually-hidden` keeps the view headings in the DOM as focus targets and shows them only while they have keyboard focus (`:focus-visible`); the focus a view switch moves there after a mouse click keeps them hidden. |
 
 ## Controlled and uncontrolled state
 
@@ -95,7 +95,7 @@ The context exposes `setView(id, reason?)`, `setSearch`, `setFilters`, `toggleFi
 | Reason | When |
 |---|---|
 | `initial` | The first resolution after hydration in uncontrolled mode, including the first responsive pick. Also reported when a `defaultView` or `enabledViews` change re-resolves the default without a breakpoint crossing or a user choice. |
-| `user` | An explicit action inside the component: a view button, Escape, a trackpad swipe, the globe's "Open the list" or "Back to the list" buttons, or `setView(id)` without a reason. Focus moves to the active view's heading. |
+| `user` | An explicit action inside the component: a view button, Escape, a trackpad swipe, the globe's "Open the list" button, the fullscreen "Exit fullscreen" button, or `setView(id)` without a reason. Focus moves to the active view's heading. |
 | `responsive` | The breakpoint crossed and the user had not chosen a view. |
 | `unavailable` | The requested view is disabled or missing, so the first registered view is shown. |
 | `controlled` | The first resolution while the `view` prop is set. Later prop changes are not reported; requests from inside the component arrive with their own reason. |
@@ -215,7 +215,6 @@ Every string and label other than formatted dates is a key of `TalksCopy`. Pass 
 | `onlineFilter` | `Online` |
 | `inPersonFilter` | `In person` |
 | `hybridFilter` | `Hybrid` |
-| `clearFilters` | `Clear filters` |
 | `resetAll` | `Reset search and filters` |
 | `upcoming` | `Upcoming` |
 | `upcomingBadge` | `Upcoming` |
@@ -232,7 +231,6 @@ Every string and label other than formatted dates is a key of `TalksCopy`. Pass 
 | `noMappedDescription` | `Add coordinates to talks, or supply a coordinate resolver, to place them on the globe.` |
 | `useList` | `Open the list` |
 | `exitFullscreen` | `Exit fullscreen` |
-| `backToList` | `Back to the list` |
 | `regions` | `Regions` |
 | `locations` | `Locations` |
 | `unassignedRegion` | `Other` |
@@ -253,7 +251,6 @@ Every string and label other than formatted dates is a key of `TalksCopy`. Pass 
 | `detailAction` | `Details` |
 | `generalAction` | `Link` |
 | `online` | `Online` |
-| `inPerson` | `In person` |
 | `hybrid` | `Hybrid` |
 | `validationError` | `The talks could not be displayed because the data is invalid.` |
 | `pluginError` | `This part of the page failed to render.` |
@@ -269,6 +266,8 @@ Function keys receive numbers or raw strings, never preformatted text:
 | `regionPercentage` | `(percentage) => string` | `42.9%` (one decimal) |
 | `actionLabel` | `(action, title) => string` | `Watch recording: Talk title` |
 | `milestoneShown` | `(title) => string` | `Milestone: Title`, announced when the visitor picks a milestone in the select |
+
+`clearFilters`, `backToList` and `inPerson` are deprecated and ignored: nothing renders them (the reset control uses `resetAll`, the fullscreen exit uses `exitFullscreen`, and in-person talks have no format badge). They stay accepted by `copy` until the next minor release.
 
 `undated` doubles as the formatted value for a talk without a valid date. `undatedMonth` fills the card margin where a dated talk shows its month abbreviation. `upcoming` is the group label; `upcomingBadge` is the badge on a card.
 

@@ -20,11 +20,13 @@ export type ThemeTokens = Partial<Record<`--wanderer-${string}`, string | number
 
 /**
  * Why a view changed.
- * - initial: the first resolution of a responsive default after hydration.
+ * - initial: the first resolution after hydration in uncontrolled mode (including the first responsive
+ *   pick), or a `defaultView`/`enabledViews` change that re-resolves the default.
  * - user: an explicit action inside the component (toggle, Escape, gesture); focus moves to the view heading.
  * - responsive: the breakpoint crossed and the user had not chosen a view yet.
  * - unavailable: the requested view is disabled or missing, so the first available view is shown.
- * - controlled: the `view` prop changed.
+ * - controlled: the first resolution while the `view` prop is set. Later changes of the prop are not
+ *   reported; requests from inside the component arrive with their own reason.
  */
 export type ViewChangeReason = 'initial' | 'user' | 'responsive' | 'unavailable' | 'controlled';
 export interface ViewChange {
@@ -49,7 +51,8 @@ export interface TalksCopy {
   onlineFilter: string;
   inPersonFilter: string;
   hybridFilter: string;
-  clearFilters: string;
+  /** @deprecated Never rendered (the reset control uses `resetAll`) and ignored. Removed in the next minor release. */
+  clearFilters?: string;
   resetAll: string;
   upcoming: string;
   upcomingBadge: string;
@@ -66,7 +69,8 @@ export interface TalksCopy {
   noMappedTalks: string;
   noMappedDescription: string;
   useList: string;
-  backToList: string;
+  /** @deprecated Never rendered (the fullscreen exit uses `exitFullscreen`) and ignored. Removed in the next minor release. */
+  backToList?: string;
   exitFullscreen: string;
   regions: string;
   locations: string;
@@ -90,7 +94,8 @@ export interface TalksCopy {
   detailAction: string;
   generalAction: string;
   online: string;
-  inPerson: string;
+  /** @deprecated Never rendered (in-person talks get no format badge) and ignored. Removed in the next minor release. */
+  inPerson?: string;
   hybrid: string;
   validationError: string;
   pluginError: string;
@@ -175,7 +180,7 @@ export interface GlobeAsideProps {
 export interface TalksSlots {
   SearchInput?: ComponentType<SearchSlotProps>;
   GlobeOverlayCard?: ComponentType<GlobeOverlayCardProps>;
-  /** Extra instance-scoped content rendered inside the globe panel beside the location list. */
+  /** Extra instance-scoped content rendered inside the globe panel, below the region and location lists. */
   GlobeAside?: ComponentType<GlobeAsideProps>;
   /** Content layered over the globe stage (absolutely positioned by the consumer's CSS). */
   GlobeStageOverlay?: ComponentType<GlobeAsideProps>;
@@ -216,7 +221,11 @@ export interface ViewContribution {
   presentation?: 'inline' | 'immersive';
   icon?: ReactNode;
   Component: ComponentType<TalkViewProps>;
-  /** Invoked when the view is about to be shown; useful for lazy chunks. */
+  /**
+   * Called speculatively on pointer enter and focus of the view's toggle, to warm a lazy chunk.
+   * Not called when the view is shown another way (setView, Escape, the responsive pick, the
+   * `view` prop), so the view must also load what it needs itself, for example in an effect.
+   */
   preload?: () => Promise<unknown>;
 }
 

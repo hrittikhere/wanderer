@@ -66,7 +66,7 @@ describe('GlobeView fallback without WebGL', () => {
     assert.equal(dom.document.activeElement?.id, section.querySelector('.wanderer-view__heading')?.id);
   });
 
-  test('the immersive presentation adds a back-to-list control that also works', async () => {
+  test('the immersive presentation adds an Exit fullscreen control that also works', async () => {
     const dom = webglLessDom(1440);
     const container = dom.document.getElementById('root')!;
     const root = createRoot(container);

@@ -47,6 +47,8 @@
 - `useColorScheme` follows a `data-wanderer-scheme` hint that appears, changes or moves after mount, and reads it from the current root after a strict validation error clears. Without a ref it reads the hint on `<html>`.
 - `DEFAULT_BREAKPOINT` moved to the helpers module, so Server Components can import it as a number; it is still exported from the root entry.
 - Tests: hydration checks fail on attribute mismatches (reported only through `console.error`), on exceptions that reach the window, and run with `MutationObserver` and controllable `IntersectionObserver`/`ResizeObserver` fakes; a browser test checks pre-hydration shell visibility and clean hydration of server HTML; `test:compat` covers a custom breakpoint, a dark OS and a plugin renderer on React 18 and 19.
+- Deprecated the copy keys `clearFilters`, `backToList` and `inPerson`: nothing renders them, so they are optional, ignored and no longer in `createDefaultCopy()`. Removed the unreachable `renderMarkerTooltip` from `GlobeRendererProps` (no view or option could set it).
+- Docs: connector lines follow the measured space beside the stage, not `context.breakpoint`; the SSR page classifies every prop for Server Components; the `globeView` options (`intro`, `autoRotate`, `label`, `heading`, `order`) are documented; the `ViewChangeReason`, `preload` and `GlobeAside` comments match the behavior; samples import the hooks they call. A docs test keeps the copy table, entry tables, prop lists and option table in step with the code.
 
 All notable changes to `@wanderer/talks` are recorded here. The format follows Keep a Changelog, and the project follows Semantic Versioning.
 

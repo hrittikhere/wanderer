@@ -7,9 +7,6 @@ import { act, createElement, StrictMode } from 'react';
 import type { TalksProps } from '../src/component-types.js';
 import { Talks } from '../src/index.js';
 import { globeView } from '../src/globe.js';
-import GlobeRenderer from '../src/globe/renderer.js';
-import type { GlobeRendererProps } from '../src/globe/renderer-types.js';
-import { createDefaultCopy } from '../src/copy.js';
 import { deriveGeography } from '../src/helpers.js';
 import { MAX_GLOBE_MARKERS } from '../src/globe/markers.js';
 import { facingPhi, projectMarker } from '../src/globe/projection.js';
@@ -257,43 +254,5 @@ describe('the hover tooltip', () => {
     const left = parseFloat(tooltip.style.left);
     assert.ok(left >= 8 && left + 256 <= STAGE - 8 + 1e-9, 'clamped inside the stage');
     assert.equal(tooltip.getAttribute('data-wanderer-tooltip-position'), spot.y * STAGE > STAGE * 0.4 ? 'above' : 'below');
-  });
-
-  test('renderMarkerTooltip replaces the default tooltip content', async () => {
-    const dom = installDom({ width: 1440, reducedMotion: true });
-    const gl = installFakeWebGl(dom);
-    sizeScene(dom);
-    const container = dom.document.getElementById('root')!;
-    const root = createRoot(container);
-    cleanups.push(async () => { await act(async () => { root.unmount(); }); gl.cleanup(); dom.cleanup(); });
-    const geography = deriveGeography(FIXTURE_TALKS);
-    const props: GlobeRendererProps = {
-      markers: geography.markers,
-      milestones: [],
-      colors: { land: [0, 0, 0], marker: [0, 0, 1], background: [1, 1, 1], glow: [1, 1, 1] },
-      colorScheme: 'light',
-      reducedMotion: true,
-      paused: false,
-      intro: false,
-      autoRotate: false,
-      showConnectors: false,
-      calloutAnchor: { x: '104%', y: '42%' },
-      copy: createDefaultCopy(),
-      locale: 'en-US',
-      direction: 'ltr',
-      formatDate: (date) => date,
-      activeMilestoneId: null,
-      onActiveMilestoneChange: () => {},
-      focusMarkerId: geography.markers.find((marker) => marker.label.includes('Lisbon'))!.id,
-      renderMarkerTooltip: (marker) => createElement('strong', { className: 'custom-tip' }, `Custom ${marker.label}`),
-    };
-    await act(async () => { root.render(createElement(GlobeRenderer, props)); });
-    await act(async () => { gl.frames.flush(); });
-    const facing = projectMarker(38.72, -9.14, facingPhi(-9.14));
-    const canvas = container.querySelector<HTMLCanvasElement>('.wanderer-globe__canvas')!;
-    await act(async () => { pointer(dom, canvas, 'pointermove', facing.x * STAGE, facing.y * STAGE); });
-    assert.match(container.querySelector('.wanderer-globe__tooltip .custom-tip')?.textContent ?? '', /^Custom Lisbon/);
-    assert.equal(container.querySelector('.wanderer-globe__tooltip-header'), null);
-    void REFERENCE_DATE;
   });
 });

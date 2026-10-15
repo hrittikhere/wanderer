@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import type { ColorScheme, Milestone, TalksCopy, TextDirection } from '../component-types.js';
 import type { Coordinates, GlobeMarker } from '../types.js';
 
@@ -27,7 +26,7 @@ export interface GlobeRendererProps {
   autoRotate: boolean;
   /** False freezes the selected milestone while allowing manual globe interaction. */
   autoMilestones?: boolean;
-  /** Draw connector lines from milestone markers toward the callout anchor (large layouts only). */
+  /** Draw connector lines from milestone markers toward the callout anchor; the view sets it while the callout fits beside the stage. */
   showConnectors: boolean;
   calloutAnchor: { x: string; y: string };
   copy: TalksCopy;
@@ -38,8 +37,6 @@ export interface GlobeRendererProps {
   onActiveMilestoneChange: (id: string | null) => void;
   /** Marker to rotate toward (set when a location is expanded in the accessible list). */
   focusMarkerId: string | null;
-  /** Optional custom tooltip content for a hovered marker. */
-  renderMarkerTooltip?: (marker: GlobeMarker) => ReactNode;
   /** The WebGL context was lost; the renderer asks the browser to restore it and rebuilds the globe when it does. */
   onContextLost?: () => void;
   onContextRestored?: () => void;

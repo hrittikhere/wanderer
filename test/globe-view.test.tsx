@@ -3,19 +3,11 @@ import assert from './support/assert.js';
 import { act, createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { Talks } from '../src/index.js';
-import { GlobeRegionList, GlobeView, globeView, type GlobeRendererProps } from '../src/globe.js';
-import GlobeRenderer from '../src/globe/renderer.js';
+import { GlobeRegionList, GlobeView, globeView } from '../src/globe.js';
 import type { LinkComponentProps, Milestone, TalkViewProps } from '../src/component-types.js';
-import { createDefaultCopy } from '../src/copy.js';
-import { deriveGeography } from '../src/helpers.js';
-import { facingPhi, projectMarker } from '../src/globe/projection.js';
-import { click, installDom, setInputValue, type DomHandle } from './support/dom.js';
+import { click, setInputValue, type DomHandle } from './support/dom.js';
 import { mountGlobe } from './support/globe.js';
-import { loadReactDomClient } from './support/react.js';
-import { installFakeWebGl } from './support/webgl.js';
 import { FIXTURE_TALKS, REFERENCE_DATE } from './support/fixtures.js';
-
-const { createRoot } = await loadReactDomClient();
 
 const LISBON: Milestone = { id: 'lisbon', title: 'Lisbon milestone', coordinates: [38.72, -9.14] };
 
@@ -32,16 +24,6 @@ function locationButton(root: Element, label: string): HTMLButtonElement {
 
 function lose(canvas: HTMLCanvasElement, dom: DomHandle): void {
   canvas.dispatchEvent(new dom.window.Event('webglcontextlost', { cancelable: true }));
-}
-
-/** The renderer reads the stage size from clientWidth/Height, which jsdom reports as 0. */
-function sizeScene(dom: DomHandle, size: number): void {
-  for (const name of ['clientWidth', 'clientHeight']) {
-    Object.defineProperty(dom.window.HTMLElement.prototype, name, {
-      configurable: true,
-      get(this: HTMLElement) { return this.classList.contains('wanderer-globe__scene') ? size : 0; },
-    });
-  }
 }
 
 describe('globeView() component identity', () => {
@@ -297,46 +279,5 @@ describe('GlobeView as a public component', () => {
     const uploaded = (rgb: number[]) => uploads.some((value) => value.length === 3 && value.every((channel, index) => Math.abs(channel - rgb[index]) < 1e-6));
     assert.ok(uploaded([1, 0, 0]), 'the land token is uploaded');
     assert.ok(uploaded([0, 0, 1]), 'the marker token is uploaded');
-  });
-
-  test('renderMarkerTooltip replaces the default tooltip content', async () => {
-    const dom = installDom({ width: 1440, reducedMotion: true });
-    const gl = installFakeWebGl(dom);
-    sizeScene(dom, 400);
-    const container = dom.document.getElementById('root')!;
-    const root = createRoot(container);
-    cleanups.push(async () => { await act(async () => { root.unmount(); }); gl.cleanup(); dom.cleanup(); });
-    const { markers } = deriveGeography(FIXTURE_TALKS);
-    const lisbon = markers.find((marker) => marker.label.startsWith('Lisbon'))!;
-    const props: GlobeRendererProps = {
-      markers,
-      milestones: [],
-      colors: { land: [0.2, 0.2, 0.2], marker: [0, 0, 1], background: [1, 1, 1], glow: [1, 1, 1] },
-      colorScheme: 'light',
-      reducedMotion: true,
-      paused: false,
-      intro: false,
-      autoRotate: false,
-      showConnectors: false,
-      calloutAnchor: { x: '104%', y: '42%' },
-      copy: createDefaultCopy(),
-      locale: 'en-US',
-      direction: 'ltr',
-      formatDate: (date) => date,
-      activeMilestoneId: null,
-      onActiveMilestoneChange: () => {},
-      focusMarkerId: null,
-      renderMarkerTooltip: (marker) => createElement('span', { className: 'custom-tip' }, `Custom ${marker.label}`),
-    };
-    await act(async () => { root.render(createElement(GlobeRenderer, props)); });
-    // The busiest location (Lisbon) starts facing the viewer.
-    const facing = projectMarker(lisbon.coordinates[0], lisbon.coordinates[1], facingPhi(lisbon.coordinates[1]));
-    const canvas = container.querySelector<HTMLCanvasElement>('.wanderer-globe__canvas')!;
-    await act(async () => {
-      canvas.dispatchEvent(new dom.window.PointerEvent('pointermove', { bubbles: true, clientX: facing.x * 400, clientY: facing.y * 400, pointerId: 1, pointerType: 'mouse' }));
-    });
-    const tooltip = container.querySelector('.wanderer-globe__tooltip');
-    assert.equal(tooltip?.querySelector('.custom-tip')?.textContent, `Custom ${lisbon.label}`);
-    assert.equal(tooltip?.querySelector('.wanderer-globe__tooltip-header'), null, 'the default content is replaced');
   });
 });

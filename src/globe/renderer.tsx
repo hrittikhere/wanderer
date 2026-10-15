@@ -181,7 +181,7 @@ function latestYear(marker: GlobeMarker, formatDate: GlobeRendererProps['formatD
 export default function GlobeRenderer(props: GlobeRendererProps) {
   const {
     markers, milestones, reducedMotion, paused, intro, showConnectors, calloutAnchor, copy, direction,
-    activeMilestoneId, focusMarkerId, renderMarkerTooltip,
+    activeMilestoneId, focusMarkerId,
   } = props;
 
   const propsRef = useRef(props);
@@ -705,26 +705,22 @@ export default function GlobeRenderer(props: GlobeRendererProps) {
         data-wanderer-tooltip-position={above ? 'above' : 'below'}
         style={style}
       >
-        {renderMarkerTooltip ? renderMarkerTooltip(marker) : (
-          <>
-            <div className="wanderer-globe__tooltip-header">
-              <PinIcon className="wanderer-globe__tooltip-icon" />
-              <span>{marker.label || copy.unknownLocation}</span>
+        <div className="wanderer-globe__tooltip-header">
+          <PinIcon className="wanderer-globe__tooltip-icon" />
+          <span>{marker.label || copy.unknownLocation}</span>
+        </div>
+        <div className="wanderer-globe__tooltip-stats">
+          <div>
+            <span className="wanderer-globe__tooltip-value">{copy.locationCount(marker.count)}</span>
+          </div>
+          {year && (
+            <div>
+              <span className="wanderer-globe__tooltip-label">{copy.latest}</span>
+              <span className="wanderer-globe__tooltip-value">{year}</span>
             </div>
-            <div className="wanderer-globe__tooltip-stats">
-              <div>
-                <span className="wanderer-globe__tooltip-value">{copy.locationCount(marker.count)}</span>
-              </div>
-              {year && (
-                <div>
-                  <span className="wanderer-globe__tooltip-label">{copy.latest}</span>
-                  <span className="wanderer-globe__tooltip-value">{year}</span>
-                </div>
-              )}
-            </div>
-            <div className="wanderer-globe__tooltip-footer">{marker.latestTalk.event}</div>
-          </>
-        )}
+          )}
+        </div>
+        <div className="wanderer-globe__tooltip-footer">{marker.latestTalk.event}</div>
       </div>
     );
   }

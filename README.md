@@ -40,7 +40,7 @@ The renderer uses the cobe 0.6 API. cobe 2 is not compatible. The peer is option
 | `react-dom` | `^18.2.0 \|\| ^19.0.0` | yes |
 | `cobe` | `^0.6.5` | yes when importing the globe; otherwise no |
 
-The published code runs on Node 20 or later (server rendering, build tools and data scripts); CI server-renders the built package on the first release of Node 20, 22 and 24. Developing the package needs Node 22.22.2+, 24.15.0+ or 26+ for the test toolchain (`devEngines` in `package.json`); `.nvmrc` selects Node 24. The package ships ESM and CommonJS builds, TypeScript declarations for each (TypeScript 5.0 or later; `moduleResolution` `bundler`, `node16`, `nodenext` and `node10` all resolve every entry) and one plain CSS file.
+The published code runs on Node 20 or later (server rendering, build tools and data scripts); CI server-renders the built package on the first release of Node 20, 22 and 24. Developing the package needs Node 22 (22.22.2 or later), Node 24 (24.15.0 or later) or Node 26 and later for the test toolchain (odd releases such as 23 and 25 are outside the range) (`devEngines` in `package.json`); `.nvmrc` selects Node 24. The package ships ESM and CommonJS builds, TypeScript declarations for each (TypeScript 5.0 or later; `moduleResolution` `bundler`, `node16`, `nodenext` and `node10` all resolve every entry) and one plain CSS file.
 
 ## Minimal setup
 
@@ -76,8 +76,8 @@ export function Page() {
 |---|---|
 | `@wanderer/talks` | `Talks`, `DEFAULT_BREAKPOINT`, `useTalks`, `createDefaultCopy`, `mergeCopy`, `definePlugin`, the list pieces (`ListView`, `listView`, `TalkGroupSection`, `EmptyState`, `TalkCard`, `Toolbar`, `Heading`, `TalkLinkAnchor`, `resolveLinkPolicy`, `ErrorBoundary`), the hooks (`useMediaQuery`, `useColorScheme`, `usePrefersReducedMotion`, `useIsClient`, `useControllable`), everything from `./helpers`, and every component type. |
 | `@wanderer/talks/helpers` | Pure functions, no `"use client"`: `DEFAULT_BREAKPOINT`, `validateTalks`, `filterTalks`, `groupTalks`, `sortTalks`, `parseCalendarDate`, `formatCalendarDate`, `isUpcoming`, `classifyTalkDate`, `talkYear`, `normalizeSearch`, `safeUrl`, `getTalkLinks`, `getPrimaryLink`, `DEFAULT_PRIMARY_LINK_PRECEDENCE`, `locationLabel`, `locationParts`, `validCoordinates`, `resolveTalkCoordinates`, `geographicDistanceKm`, `deriveGeography`, `compareIds`, `definePlugin`, `registerPlugins`, `collectContributions`, plus the schema types (`Talk`, `TalkLink`, `LinkKind`, `ValidationResult`, `Geography`, and so on). |
-| `@wanderer/talks/list` | `ListView`, `listView`, `TalkCard`, `Toolbar`, `TalkGroupSection`, `EmptyState`, `TalkLinkAnchor`, `resolveLinkPolicy`, `Heading`, and the types `TalkViewProps`, `TalkRendererProps`, `ViewContribution`, `TalksContext`. |
-| `@wanderer/talks/globe` | `GlobeView`, `globeView(options)`, `preloadGlobeView`, `GlobeRegionList`, and the types `GlobeViewOptions`, `GlobeColors`, `GlobeRendererProps`, `PositionedMilestone`, `Rgb`. |
+| `@wanderer/talks/list` | `ListView`, `listView`, `TalkCard`, `Toolbar`, `TalkGroupSection`, `EmptyState`, `TalkLinkAnchor`, `resolveLinkPolicy`, `Heading`, and the types `TalkViewProps`, `TalkRendererProps`, `ViewContribution`, `TalksContext`, `EmptyStateProps`, `ToolbarProps`, `TalkLinkAnchorProps`, `HeadingProps`. |
+| `@wanderer/talks/globe` | `GlobeView`, `globeView(options)`, `preloadGlobeView`, `GlobeRegionList`, and the types `GlobeViewOptions`, `GlobeViewProps`, `GlobeColors`, `GlobeRendererProps`, `PositionedMilestone`, `Rgb`. |
 | `@wanderer/talks/styles.css` | The stylesheet. Component styles are scoped to `.wanderer`; one `html:has()` rule locks scrolling while a Wanderer fullscreen dialog is open. |
 
 `definePlugin` is exported from the root entry and from `./helpers`. It is an identity function typed `<T extends TalksPlugin>(plugin: T) => T`, so an unannotated literal gets contextual types for its callbacks.
