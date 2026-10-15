@@ -10,6 +10,10 @@
 - Reject unsafe links from plugin actions and direct `TalkLinkAnchor` usage before reaching routers.
 - Add runnable Vite and Next.js examples, packed-consumer production builds, bundle budgets, browser regression tests and axe checks in CI.
 - Correct installation, fallback, SSR and integration documentation to match the tested behavior.
+- Fix the CommonJS build's globe: the renderer unwraps `cobe`'s default export, which the CommonJS interop bound to the module namespace. `npm test` now mounts the globe from both built copies.
+- Share one React context between the ESM and CommonJS copies, so `useTalks` works across the dual-package boundary.
+- Ship per-condition declarations (`dist/cjs/*.d.ts` for `require`), `typesVersions` for `node10` resolution, the `src` files the source maps reference, and `publishConfig.access: public`. The package-smoke check compiles a TypeScript 5.0 consumer under every resolution mode.
+- `engines` now states the runtime floor (Node 20 or later) instead of the test toolchain's range, which moved to `devEngines`.
 
 All notable changes to `@wanderer/talks` are recorded here. The format follows Keep a Changelog, and the project follows Semantic Versioning.
 

@@ -1,6 +1,6 @@
 // Test the actual tarball in isolated consumer projects, without workspace
 // symlinks masking missing exports, runtime dependencies or RSC directives.
-import { cp, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,4 +47,36 @@ assert.ok(listBytes < 18_000, `list gzip budget exceeded: ${listBytes} > 18000 b
 const globe = await build({ stdin: { contents: 'export { globeView } from "@wanderer/talks/globe";', resolveDir: path.join(destination, 'vite') }, bundle: true, format: 'esm', platform: 'browser', minify: true, write: false, external: ['react', 'react-dom', 'react/jsx-runtime'] });
 const globeBytes = gzipSync(globe.outputFiles[0].contents).length;
 assert.ok(globeBytes < 30_000, `globe gzip budget exceeded: ${globeBytes} > 30000 bytes (cobe included, React excluded)`);
-console.log(`Packed list without cobe passed. Gzip sizes: list ${listBytes} B, globe with cobe ${globeBytes} B. Fixtures: ${destination}`);
+console.log(`Packed list without cobe passed. Gzip sizes: list ${listBytes} B, globe with cobe ${globeBytes} B.`);
+
+// TypeScript consumers: every entry's declarations must resolve and parse under
+// each module resolution mode a consumer may use. TypeScript 5.x is the oldest
+// supported compiler and the last one with node10 (classic `node`) resolution,
+// which ignores `exports` and needs `typesVersions` for the subpaths.
+const typesDir = path.join(destination, 'types');
+await mkdir(typesDir, { recursive: true });
+await writeFile(path.join(typesDir, 'package.json'), JSON.stringify({
+  private: true,
+  dependencies: { '@wanderer/talks': `file:${tarball}`, typescript: '~5.0.4', '@types/react': '^19.0.0', react: '^19.0.0', 'react-dom': '^19.0.0', cobe: '^0.6.5' },
+}));
+run(['install', '--no-audit', '--no-fund'], typesDir);
+const consumerSource = `import { validateTalks, type Talk } from '@wanderer/talks/helpers';
+import { Talks, useTalks, type TalksProps } from '@wanderer/talks';
+import { ListView } from '@wanderer/talks/list';
+import { globeView, type GlobeViewOptions } from '@wanderer/talks/globe';
+const talks: Talk[] = validateTalks([]).talks;
+const props: TalksProps = { talks, views: [globeView({} satisfies GlobeViewOptions)] };
+export { props, Talks, useTalks, ListView };
+`;
+for (const file of ['consumer.ts', 'consumer.cts', 'consumer.mts']) await writeFile(path.join(typesDir, file), consumerSource);
+const tsc = path.join(typesDir, 'node_modules', 'typescript', 'bin', 'tsc');
+for (const [module, moduleResolution, file] of [
+  ['commonjs', 'node10', 'consumer.ts'],
+  ['node16', 'node16', 'consumer.cts'],
+  ['node16', 'node16', 'consumer.mts'],
+  ['esnext', 'bundler', 'consumer.ts'],
+]) {
+  const check = spawnSync(process.execPath, [tsc, '--noEmit', '--strict', '--skipLibCheck', 'false', '--jsx', 'react-jsx', '--types', 'react', '--target', 'es2020', '--module', module, '--moduleResolution', moduleResolution, file], { cwd: typesDir, encoding: 'utf8' });
+  assert.equal(check.status, 0, `TypeScript ${moduleResolution} (${file}) could not use the declarations:\n${check.stdout}${check.stderr}`);
+}
+console.log(`Packed declarations passed under node10, node16 (CommonJS and ESM) and bundler resolution. Fixtures: ${destination}`);

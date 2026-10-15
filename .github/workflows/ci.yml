@@ -25,6 +25,28 @@ jobs:
       - run: npm test
       - run: npm pack --dry-run
 
+  runtime:
+    # The published code's floor (`engines`), not the toolchain's: build with
+    # the toolchain Node, then load and server-render dist on the first
+    # release of each supported line.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20.0.0', '22.0.0', '24.0.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node scripts/runtime-smoke.mjs
+
   consumers:
     runs-on: ubuntu-latest
     steps:

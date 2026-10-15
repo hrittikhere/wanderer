@@ -11,7 +11,7 @@
 //   5. the hover tooltip.
 // Colors, rotation, and sizes change on the live cobe state inside onRender;
 // the globe is only recreated when the marker set changes.
-import createGlobe, { type COBEOptions } from 'cobe';
+import cobeExport, { type COBEOptions } from 'cobe';
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { PinIcon } from '../components/icons.js';
 import type { TextDirection } from '../component-types.js';
@@ -26,6 +26,13 @@ import { markerSetKey, markerSize } from './markers.js';
 import { MilestoneTracker } from './milestones.js';
 import { R, THETA, clamp, easeOutCubic, facingPhi, projectMarker, shortestRotation } from './projection.js';
 import type { GlobeRendererProps } from './renderer-types.js';
+
+// cobe is ESM-only. The CommonJS build binds this default import to the whole
+// `require('cobe')` result, which is cobe's module namespace under Node's
+// require(esm) and under bundlers, so the function sits one `default` deeper.
+const createGlobe: typeof cobeExport = typeof cobeExport === 'function'
+  ? cobeExport
+  : (cobeExport as unknown as { default: typeof cobeExport }).default;
 
 type GlobeState = Parameters<COBEOptions['onRender']>[0];
 type GlobeInstance = ReturnType<typeof createGlobe>;

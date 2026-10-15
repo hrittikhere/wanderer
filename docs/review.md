@@ -25,4 +25,4 @@ The package contains no personal speaking data. Installing these changes does no
 - Preserve event, recording, slides and detail links separately. The referenced SREday London entry contains an event URL with trailing title text; repair that source record and verify the destination. This package rejects whitespace-containing URLs but cannot infer their intended destination.
 - Keep invitations, contact details and current-location cards in site-owned slots. Place important controls outside decorative overlays so the globe remains usable on mobile.
 
-See [migration.md](migration.md) for the adapter, [examples](../examples/README.md) for working integrations, and the root README for the four verification commands. Remix and Astro, mobile hardware GPUs and browsers other than Chromium still need host-specific verification.
+See [migration.md](migration.md) for the adapter, [examples](https://github.com/hrittikhere/wanderer/blob/main/examples/README.md) for working integrations, and the root README for the four verification commands. Remix and Astro, mobile hardware GPUs and browsers other than Chromium still need host-specific verification.

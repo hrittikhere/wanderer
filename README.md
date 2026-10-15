@@ -17,7 +17,7 @@ Plugin-based React components and pure helpers for publishing a speaking history
 
 ## Installation
 
-The package is not published to npm yet. Try the [runnable examples](examples/README.md), or install a packed checkout:
+The package is not published to npm yet. Try the [runnable examples](https://github.com/hrittikhere/wanderer/blob/main/examples/README.md), or install a packed checkout:
 
 ```sh
 git clone https://github.com/hrittikhere/wanderer.git
@@ -40,7 +40,7 @@ The renderer uses the cobe 0.6 API. cobe 2 is not compatible. The peer is option
 | `react-dom` | `^18.2.0 \|\| ^19.0.0` | yes |
 | `cobe` | `^0.6.5` | yes when importing the globe; otherwise no |
 
-Use Node 22.22.2+, 24.15.0+, or 26+ (the exact engine range is in `package.json`). `.nvmrc` selects Node 24. The package ships ESM and CommonJS builds, TypeScript declarations and one plain CSS file.
+The published code runs on Node 20 or later (server rendering, build tools and data scripts); CI server-renders the built package on the first release of Node 20, 22 and 24. Developing the package needs Node 22.22.2+, 24.15.0+ or 26+ for the test toolchain (`devEngines` in `package.json`); `.nvmrc` selects Node 24. The package ships ESM and CommonJS builds, TypeScript declarations for each (TypeScript 5.0 or later; `moduleResolution` `bundler`, `node16`, `nodenext` and `node10` all resolve every entry) and one plain CSS file.
 
 ## Minimal setup
 
@@ -236,7 +236,7 @@ export function App() {
 ## Compatibility
 
 - React 18.2 and later, and React 19, per the peer range. The automated compatibility script (`scripts/react-compat.mjs` in the repository, not in the published package) packs the package, installs it into an isolated project per React version and runs a server render, hydration and interaction check. It exercises React 18.3.1 and the installed React 19 version. The packed list consumer also builds with React 18.2.0.
-- Vite and Next.js App Router production builds are verified using isolated tarball installs, including RSC boundaries and CSS exports. See [examples](examples/README.md).
+- Vite and Next.js App Router production builds are verified using isolated tarball installs, including RSC boundaries and CSS exports. See [examples](https://github.com/hrittikhere/wanderer/blob/main/examples/README.md).
 - Browser verification is performed in Chromium via Playwright. Other browsers are not part of the automated run.
 - The globe needs WebGL (WebGL2, WebGL or `experimental-webgl`). Without it the view shows a fallback with a button back to the list.
 
