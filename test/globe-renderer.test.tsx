@@ -9,7 +9,7 @@ import { facingPhi, projectMarker } from '../src/globe/projection.js';
 import { click, installDom, setInputValue, type DomHandle } from './support/dom.js';
 import { loadReactDomClient } from './support/react.js';
 import { installFakeWebGl, type FakeWebGl, type FakeWebGlOptions } from './support/webgl.js';
-import { FIXTURE_TALKS, REFERENCE_DATE } from './support/fixtures.js';
+import { FIXTURE_TALKS, REFERENCE_DATE, talk } from './support/fixtures.js';
 
 const { createRoot } = await loadReactDomClient();
 
@@ -272,5 +272,25 @@ describe('the WebGL renderer under a fake GL context', () => {
     await item.frame();
     await hoverLisbon();
     assert.ok(item.globe.querySelector('.wanderer-globe__tooltip') === null, 'the globe stayed where the user left it');
+  });
+});
+
+describe('marker identity under search and filters', () => {
+  test('filtering out the host talk keeps the location, its open panel and the WebGL globe', async () => {
+    const berlin = (id: string, tags: string[]) => talk({ id, tags, location: 'Berlin, Germany', coordinates: [52.52, 13.405] });
+    const item = await mountGlobe({ talks: [berlin('berlin-a', []), berlin('berlin-b', ['kept']), berlin('berlin-c', ['kept'])] });
+    assert.equal(item.gl.programs, 1);
+    const button = () => item.section.querySelector<HTMLButtonElement>('.wanderer-globe__location-button')!;
+    await act(async () => { click(button(), item.dom.window); });
+    assert.equal(button().getAttribute('aria-expanded'), 'true');
+    // Drops the lowest-id host while two talks stay, so the marker size step is unchanged.
+    await act(async () => { setInputValue(item.search, 'kept', item.dom.window); });
+    assert.equal(item.section.querySelectorAll('.wanderer-globe__location').length, 1);
+    assert.match(item.section.querySelector('.wanderer-globe__location-summary')!.textContent!, /2 talks/);
+    assert.equal(button().getAttribute('aria-expanded'), 'true', 'the open location stays open');
+    assert.equal(item.gl.programs, 1, 'the drawn marker set is unchanged, so the globe is not rebuilt');
+    await act(async () => { setInputValue(item.search, '', item.dom.window); });
+    assert.equal(button().getAttribute('aria-expanded'), 'true');
+    assert.equal(item.gl.programs, 1);
   });
 });

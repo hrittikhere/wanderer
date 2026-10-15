@@ -24,7 +24,7 @@ Every option of `<Talks>` from `@wanderer/talks`. Types come from `TalksProps` i
 | `milestones` | `readonly Milestone[]` | `[]` | Callouts on the globe. A milestone anchors at `coordinates`, or at the coordinates of the talk named by `talkId`. Milestones that resolve no coordinates are dropped. |
 | `ImageComponent` | `ComponentType<ImageComponentProps>` | a plain `<img loading="lazy" decoding="async">` | Renders milestone images. Pass `next/image` or similar. |
 | `navigation` | `NavigationOptions` | `{}` | `LinkComponent`, `linkComponentKinds`, `onNavigate`, `policies`, `primaryLink`. See [links.md](links.md). |
-| `geography` | `GeographyOptions` | `undefined` | `resolveCoordinates`, `mergeDistanceKm` (64), `assignRegion`, `unassignedRegion`. Inside the component `unassignedRegion` defaults to `copy.unassignedRegion` (`"Other"`); the bare helper defaults to `"Unassigned"`. Geography is derived from the filtered talks, so search and filters change the globe. |
+| `geography` | `GeographyOptions` | `undefined` | `resolveCoordinates`, `mergeDistanceKm` (64), `assignRegion`, `unassignedRegion`. Inside the component `unassignedRegion` defaults to `copy.unassignedRegion` (`"Other"`); the bare helper defaults to `"Unassigned"`. Geography is derived from the filtered talks, so search and filters change the globe. Markers are merged once from all talks, so a location keeps its marker id, coordinates and label while search and filters narrow its talks. A marker is labeled by its host (lowest id) talk's location, or by the first merged talk with a location when the host has none. |
 
 ### View state
 
@@ -157,6 +157,10 @@ Search text and every searched field are normalized with `normalizeSearch`: NFKD
 - each entry of `tags`
 
 Active filters are applied as predicates on the same pass. The toolbar count uses `copy.resultCount(matching, total)`. A polite live region announces that count 600 ms after the last change, only while search text or a filter is active.
+
+### Large histories
+
+The search field and filter chips update immediately; filtering, grouping and re-rendering the list follow in a deferred render (`useDeferredValue`), which React interrupts when the next keystroke arrives, so typing stays responsive with long lists. Globe markers are merged once from all talks (in time proportional to the number of talks), and each search or filter only narrows that result. The list renders every matching talk and has no virtualization: a few hundred talks render in tens of milliseconds, while several thousand produce megabytes of server HTML and a noticeable first render. For histories that large, paginate or window the list in a custom view (see [plugins.md](plugins.md)), or pass a pre-filtered `talks` array.
 
 ## Validation
 

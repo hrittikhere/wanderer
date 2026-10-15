@@ -339,8 +339,16 @@ export function GlobeView({ context, active, options }: GlobeViewComponentProps)
 
   const hasMarkers = geography.markers.length > 0;
   const webGlRef = useRef<boolean | null>(null);
+  const rendererRef = useRef(Renderer);
+  rendererRef.current = Renderer;
   useEffect(() => {
     if (!isClient || !active || !hasMarkers) return;
+    // Markers refilling after an empty result: the renderer is already loaded, so mount it again without a loading pass.
+    if (webGlRef.current && rendererRef.current) {
+      setErrorKind(null);
+      setStatus('ready');
+      return;
+    }
     let cancelled = false;
     setStatus('loading');
     setErrorKind(null);

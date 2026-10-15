@@ -82,7 +82,7 @@ export interface TalkGroup {
 export interface GeographyOptions {
   /** Called only when a talk has no explicit coordinates. Online talks are never resolved. */
   resolveCoordinates?: (talk: Talk) => Coordinates | null | undefined;
-  /** Great-circle kilometers. Default: 64. Zero merges identical points only. */
+  /** Great-circle kilometers. Default: 64. Zero merges identical points only, including longitude 180 and -180 or any two longitudes at a pole. */
   mergeDistanceKm?: number;
   /** When omitted, no region summary is produced (locations are still listed). */
   assignRegion?: (talk: Talk, coordinates: Coordinates) => string | null | undefined;

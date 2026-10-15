@@ -21,6 +21,9 @@
 - The hover tooltip can be dismissed with Escape, stays dismissed until the pointer leaves the marker, can be hovered, and is positioned by its rendered width.
 - Milestone callouts close as soon as their dot turns behind the globe; repeated milestone ids keep the first milestone.
 - `parseCssColor` rejects malformed channels instead of returning NaN and runs in linear time.
+- Globe markers are merged once from all talks and narrowed for search and filters, so a location keeps its id, label and open panel while its host talk is filtered out, and the globe is not rebuilt. A host without a location takes the first label among its merged talks; `mergeDistanceKm: 0` merges both encodings of an antimeridian or pole point.
+- `deriveGeography` buckets hosts in a spatial grid: time grows with the number of talks, not talks times locations.
+- Search and filter changes filter the list in a deferred render, so typing stays responsive with long lists. Refilling an emptied globe remounts the loaded renderer without a loading pass.
 
 All notable changes to `@wanderer/talks` are recorded here. The format follows Keep a Changelog, and the project follows Semantic Versioning.
 

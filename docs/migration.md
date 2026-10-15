@@ -11,7 +11,7 @@ This guide moves data from a hand-rolled `Talk` interface, as found in many pers
 | `event` | `event` | As is. |
 | `date` (`DD/MM/YYYY`) | `date` (`YYYY-MM-DD`) | String rewrite, no `Date` parsing. See below. |
 | `description` | `description` | As is. Required as a string; use `''` when missing. |
-| `location` (string) | `location` | A string is accepted. `locationParts` splits `"City, Region, Country"` into city and country on the first and last comma. An object `{ city, country }` is also accepted. |
+| `location` (string) | `location` | A string is accepted. `locationParts` splits `"City, Region, Country"` into city and country on the first and last comma, after trimming each segment and dropping empty ones, so `", Portugal"` reads as the bare city `"Portugal"`. An object `{ city, country }` is also accepted. |
 | `coordinates` (`[lat, lng]`) | `coordinates` | As is. Out-of-range or non-finite values are a validation error. |
 | derived | `format` | `'in-person'`, `'online'` or `'hybrid'`. A common legacy convention is an "(online)" suffix in the event name. |
 | `eventUrl` | `eventUrl` | Unless its host is a video host, in which case it becomes the recording. |

@@ -72,7 +72,10 @@ export function locationLabel(location: Talk['location']): string {
   return typeof location === 'string' ? location : [location?.city, location?.country].filter(Boolean).join(', ');
 }
 
-/** "City, Region, Country" splits on the first and last comma; a bare string is the city. */
+/**
+ * "City, Region, Country" splits on the first and last comma; a bare string is the city.
+ * Segments are trimmed and empty ones dropped first, so ", Portugal" reads as the bare string "Portugal".
+ */
 export function locationParts(location: Talk['location']): { city?: string; country?: string } {
   if (!location) return {};
   if (typeof location !== 'string') {
@@ -211,13 +214,41 @@ export function resolveTalkCoordinates(talk: Talk, options: GeographyOptions = {
   return validCoordinates(value) ? value : undefined;
 }
 
+const EARTH_RADIUS_KM = 6371.0088;
+
 /** Great-circle kilometers, naturally handling locations on either side of ±180°. */
 export function geographicDistanceKm(a: Coordinates, b: Coordinates): number {
   const radians = Math.PI / 180;
   const halfLat = Math.sin((b[0] - a[0]) * radians / 2);
   const halfLng = Math.sin((b[1] - a[1]) * radians / 2);
   const haversine = halfLat ** 2 + Math.cos(a[0] * radians) * Math.cos(b[0] * radians) * halfLng ** 2;
-  return 2 * 6371.0088 * Math.asin(Math.sqrt(Math.max(0, Math.min(1, haversine))));
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(Math.max(0, Math.min(1, haversine))));
+}
+
+/** Below a millimeter two coordinates are one point, such as longitude 180 and -180 or two longitudes at a pole. */
+const SAME_POINT_KM = 1e-6;
+
+/** A point on the unit sphere. Nearby points have nearby vectors on both sides of the antimeridian and at the poles. */
+function unitVector([latitude, longitude]: Coordinates): [number, number, number] {
+  const lat = latitude * Math.PI / 180;
+  const lng = longitude * Math.PI / 180;
+  return [Math.cos(lat) * Math.cos(lng), Math.cos(lat) * Math.sin(lng), Math.sin(lat)];
+}
+
+/** Newest dated talk first, undated last, ties by ascending id: the first talk `sortTalks` would return. */
+function newerTalk(a: Talk, b: Talk, times: Map<Talk, number | undefined>): Talk {
+  const time = (talk: Talk) => {
+    if (!times.has(talk)) times.set(talk, parseCalendarDate(talk.date)?.getTime());
+    return times.get(talk);
+  };
+  const left = time(a);
+  const right = time(b);
+  if (left !== right) {
+    if (left === undefined) return b;
+    if (right === undefined) return a;
+    return right > left ? b : a;
+  }
+  return compareIds(a.id, b.id) <= 0 ? a : b;
 }
 
 export function deriveGeography(talks: readonly Talk[], options: GeographyOptions = {}): Geography {
@@ -226,6 +257,15 @@ export function deriveGeography(talks: readonly Talk[], options: GeographyOption
   const mappedTalks: Talk[] = [];
   const markers: GlobeMarker[] = [];
   const regionCounts = new Map<string, number>();
+  const unlabeled = new Set<GlobeMarker>();
+  const times = new Map<Talk, number | undefined>();
+  // Hosts are bucketed in a grid over unit-sphere vectors whose cell is the
+  // chord of the merge distance, so every host within reach sits in one of the
+  // 27 cells around a point: lookups cost the same however many hosts exist.
+  const mergeLimit = Math.max(mergeDistanceKm, SAME_POINT_KM);
+  const cell = Math.max(2 * Math.sin(Math.min(mergeLimit / EARTH_RADIUS_KM, Math.PI) / 2), 1e-12);
+  const grid = new Map<number, Map<number, Map<number, number[]>>>();
+  const bucketAt = (x: number, y: number, z: number) => grid.get(x)?.get(y)?.get(z);
   // Stable ID hosts the first marker; nearest existing host wins, then stable host ID.
   for (const talk of [...talks].sort((a, b) => compareIds(a.id, b.id))) {
     const coordinates = resolveTalkCoordinates(talk, options);
@@ -236,15 +276,48 @@ export function deriveGeography(talks: readonly Talk[], options: GeographyOption
       const region = assigned || (options.unassignedRegion === undefined ? 'Unassigned' : options.unassignedRegion);
       if (region !== null) regionCounts.set(region, (regionCounts.get(region) ?? 0) + 1);
     }
-    const nearest = markers.map((marker) => ({ marker, distance: geographicDistanceKm(marker.coordinates, coordinates) }))
-      .filter(({ distance }) => distance <= mergeDistanceKm)
-      .sort((a, b) => a.distance - b.distance || compareIds(a.marker.id, b.marker.id))[0]?.marker;
-    if (nearest) {
+    const vector = unitVector(coordinates);
+    const x = Math.floor(vector[0] / cell);
+    const y = Math.floor(vector[1] / cell);
+    const z = Math.floor(vector[2] / cell);
+    // Markers are created in id order, so the lowest index wins distance ties: the lowest host id.
+    let nearestIndex = -1;
+    let nearestDistance = Infinity;
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dz = -1; dz <= 1; dz += 1) {
+          const bucket = bucketAt(x + dx, y + dy, z + dz);
+          if (!bucket) continue;
+          for (const index of bucket) {
+            const distance = geographicDistanceKm(markers[index].coordinates, coordinates);
+            if (!(distance <= mergeDistanceKm || distance < SAME_POINT_KM)) continue;
+            if (distance < nearestDistance || (distance === nearestDistance && index < nearestIndex)) {
+              nearestIndex = index;
+              nearestDistance = distance;
+            }
+          }
+        }
+      }
+    }
+    const label = locationLabel(talk.location);
+    if (nearestIndex >= 0) {
+      const nearest = markers[nearestIndex];
       nearest.talks.push(talk);
       nearest.count += 1;
-      nearest.latestTalk = sortTalks([nearest.latestTalk, talk])[0];
+      nearest.latestTalk = newerTalk(nearest.latestTalk, talk, times);
+      // A host without a location takes the first label among its merged talks.
+      if (label && unlabeled.delete(nearest)) nearest.label = label;
     } else {
-      markers.push({ id: talk.id, coordinates, label: locationLabel(talk.location) || `${coordinates[0]}, ${coordinates[1]}`, count: 1, talks: [talk], latestTalk: talk });
+      const marker: GlobeMarker = { id: talk.id, coordinates, label: label || `${coordinates[0]}, ${coordinates[1]}`, count: 1, talks: [talk], latestTalk: talk };
+      if (!label) unlabeled.add(marker);
+      let plane = grid.get(x);
+      if (!plane) grid.set(x, plane = new Map());
+      let row = plane.get(y);
+      if (!row) plane.set(y, row = new Map());
+      const bucket = row.get(z);
+      if (bucket) bucket.push(markers.length);
+      else row.set(z, [markers.length]);
+      markers.push(marker);
     }
   }
   return {

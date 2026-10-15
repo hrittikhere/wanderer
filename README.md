@@ -242,10 +242,11 @@ export function App() {
 
 ### Known limitations
 
-These frameworks are untested. The notes describe what should happen based on how the package is built, not on verification.
+Remix, Astro and Create React App are untested; their notes describe what should happen based on how the package is built, not on verification.
 
 - **Remix**: untested. The package is ESM and CommonJS with per-file `"use client"` directives, which Remix ignores harmlessly. The client adapter pattern above should work; keep `referenceDate` in the loader.
 - **Astro**: untested. Use the React integration with `client:only="react"` or `client:load`. The globe checks browser APIs after hydration, so SSR does not require `client:only`; verify the chosen Astro integration in your app.
+- **Very large histories**: the list is not virtualized. Typing stays responsive because filtering runs in a deferred render, but several thousand talks make the first render and the server HTML heavy. See [Large histories](docs/configuration.md#large-histories).
 - **Create React App**: untested. `react-scripts` 5 resolves package `exports` maps only partially, so the subpath entries may need explicit paths. It has no `"use client"` handling, which is harmless. The CSS import works.
 
 ## Development and checks

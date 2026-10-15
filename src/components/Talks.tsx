@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  useCallback, useEffect, useId, useMemo, useRef, useState,
+  useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState,
   type AnchorHTMLAttributes, type CSSProperties, type KeyboardEvent, type ReactNode, type WheelEvent,
 } from 'react';
 import type {
@@ -11,6 +11,7 @@ import type {
 } from '../component-types.js';
 import type { Talk, TalkGroup, TalkLink } from '../types.js';
 import { TalksReactContext } from '../context.js';
+import { restrictGeography } from '../geography.js';
 import { mergeCopy } from '../copy.js';
 import {
   DEFAULT_PRIMARY_LINK_PRECEDENCE, deriveGeography, filterTalks, formatCalendarDate, getPrimaryLink,
@@ -292,19 +293,23 @@ export function Talks(props: TalksProps) {
   }, [filters, setFilters]);
   const resetAll = useCallback(() => { setSearch(''); setFilters(EMPTY_FILTERS); }, [setSearch, setFilters]);
 
-  const activeFilters = useMemo(
-    () => registry.filters.filter((filter) => filters.includes(filter.id)),
-    [registry.filters, filters],
-  );
-  const hasActiveFilters = search.trim().length > 0 || activeFilters.length > 0;
+  const hasActiveFilters = search.trim().length > 0 || registry.filters.some((filter) => filters.includes(filter.id));
 
+  // The input and chips update at once; filtering, grouping and re-rendering a
+  // long list follow in an interruptible render, so typing stays responsive.
+  const deferredSearch = useDeferredValue(search);
+  const deferredFilters = useDeferredValue(filters);
+  const activeFilters = useMemo(
+    () => registry.filters.filter((filter) => deferredFilters.includes(filter.id)),
+    [registry.filters, deferredFilters],
+  );
   const talks = useMemo(() => {
-    const predicateContext = { referenceDate, allTalks, search, filters };
+    const predicateContext = { referenceDate, allTalks, search: deferredSearch, filters: deferredFilters };
     return filterTalks(allTalks, {
-      search,
+      search: deferredSearch,
       predicates: activeFilters.map((filter) => (talk: Talk) => filter.predicate(talk, predicateContext)),
     });
-  }, [allTalks, search, filters, activeFilters, referenceDate]);
+  }, [allTalks, deferredSearch, deferredFilters, activeFilters, referenceDate]);
 
   const groups = useMemo(
     () => groupTalks(talks, { referenceDate, upcoming: grouping, undatedLabel: copy.undated, upcomingLabel: copy.upcoming, locale }),
@@ -315,7 +320,9 @@ export function Talks(props: TalksProps) {
     ...geographyOptions,
     unassignedRegion: geographyOptions?.unassignedRegion === undefined ? copy.unassignedRegion : geographyOptions.unassignedRegion,
   }), [geographyOptions, copy]);
-  const geography = useMemo(() => deriveGeography(talks, resolvedGeographyOptions), [talks, resolvedGeographyOptions]);
+  // Markers merge once from every talk so search and filters never re-host a location.
+  const allGeography = useMemo(() => deriveGeography(allTalks, resolvedGeographyOptions), [allTalks, resolvedGeographyOptions]);
+  const geography = useMemo(() => restrictGeography(allGeography, talks, resolvedGeographyOptions), [allGeography, talks, resolvedGeographyOptions]);
 
   const rootRef = useRef<HTMLElement>(null);
   const colorScheme = useColorScheme(theme, rootRef);
