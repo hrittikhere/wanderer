@@ -715,7 +715,8 @@ export function Talks(props: TalksProps) {
               onExit={exit}
               onEscape={() => { if (escapeToList && !isModalOpen?.()) exit(); }}
             >
-              <Toolbar context={context} activeView={shell.view} shellKey={shell.key} search={search} filters={filters} hasActiveFilters={liveHasActiveFilters} />
+              <Toolbar context={context} activeView={shell.view} shellKey={shell.key} search={search} filters={filters} hasActiveFilters={liveHasActiveFilters}
+                enableSearch={props.enableSearch} enableFilters={props.enableFilters} enableResultCount={props.enableResultCount} enableViewSwitcher={props.enableViewSwitcher} />
               {view && headingId && (
                 <div className="wanderer-view" data-wanderer-view-id={view.id}>
                   <Heading

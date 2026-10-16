@@ -61,7 +61,7 @@ const expected = {
   '@wanderer/talks': ['Talks', 'validateTalks', 'definePlugin', 'useTalks'],
   '@wanderer/talks/helpers': ['validateTalks', 'deriveGeography', 'groupTalks'],
   '@wanderer/talks/list': ['ListView', 'TalkCard', 'Toolbar'],
-  '@wanderer/talks/globe': ['GlobeView', 'globeView', 'preloadGlobeView', 'GlobeRegionList'],
+  '@wanderer/talks/globe': ['Wanderer', 'GlobeView', 'globeView', 'preloadGlobeView', 'GlobeRegionList'],
 };
 for (const entry of entries) {
   try {
@@ -167,6 +167,24 @@ for (const { width, breakpoint, dark } of [{ width: 390 }, { width: 1440 }, { wi
   const globe = section.querySelector('.wanderer-globe');
   result.globeFallback = globe ? { status: globe.getAttribute('data-wanderer-globe-status'), error: globe.getAttribute('data-wanderer-globe-error'), title: globe.querySelector('.wanderer-empty__title')?.textContent ?? null } : null;
   if (!globe || result.globeFallback.status !== 'error' || result.globeFallback.error !== 'webgl') fail(label + ': globe fallback not shown without WebGL');
+  await act(async () => { root.unmount(); });
+  // Verify the new core and independent additions under every supported React version too.
+  const { Wanderer } = await import('@wanderer/talks/globe');
+  const coreElement = (additions) => React.createElement(Wanderer, {
+    talks, milestones: [{ id: 'home', title: 'Home', coordinates: [0, 0] }],
+    enableSidebox: additions, enableSearch: additions, enableFilters: additions, enableResultCount: additions, enableList: additions,
+  });
+  container.innerHTML = renderToString(coreElement(false));
+  const coreErrors = [];
+  await act(async () => { root = hydrateRoot(container, coreElement(false), { onRecoverableError: (error) => coreErrors.push(String(error)) }); });
+  if (coreErrors.length) fail(label + ': Wanderer hydration errors ' + coreErrors.join(', '));
+  if (container.querySelector('.wanderer-toolbar, .wanderer-globe__panel')) fail(label + ': Wanderer enabled an addition by default');
+  if (container.querySelector('.wanderer')?.getAttribute('data-wanderer-view') !== 'globe') fail(label + ': Wanderer did not default to globe');
+  if (container.textContent.includes('Everything is in the list')) fail(label + ': core fallback refers to a disabled list');
+  await act(async () => root.render(coreElement(true)));
+  for (const selector of ['.wanderer-search', '.wanderer-filters', '.wanderer-toolbar__count', '.wanderer-views', '.wanderer-globe__panel']) {
+    if (!container.querySelector(selector)) fail(label + ': Wanderer addition missing ' + selector);
+  }
   await act(async () => { root.unmount(); });
   window.close();
 }

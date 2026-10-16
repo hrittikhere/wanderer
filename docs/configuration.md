@@ -1,5 +1,29 @@
 # Configuration
 
+## Globe core and optional additions
+
+Use `Wanderer` from `@wanderer/talks/globe` for the globe and milestones. All page additions default to off: `enableSidebox`, `enableList`, `enableSearch`, `enableFilters`, `enableResultCount` and `enableHint`. Each enables only its own UI. An empty toolbar is omitted entirely.
+
+```tsx
+import { Wanderer } from '@wanderer/talks/globe';
+
+<Wanderer talks={talks} milestones={milestones} enableSidebox />;
+<Wanderer talks={talks} milestones={milestones} enableSearch enableFilters enableList enableResultCount />;
+<Wanderer milestones={[{ id: 'home', title: 'Home', coordinates: [22.57, 88.36] }]} />;
+```
+
+`talks` is optional. Milestones with explicit coordinates can render without mapped talks. A milestone with only `talkId` appears when its talk is mapped in the current results. Explicit milestone coordinates are independent of talk search and filters. Invalid coordinates are omitted, or resolved from the referenced talk.
+
+`enableSidebox` includes the region statistics, expandable location list and mapped summary. `GlobeAside` slots are mounted only while it is enabled. The sidebox provides the keyboard-accessible equivalent of talk markers. Milestone selection and pause controls stay part of the core. `enableList` enables the list view and its switcher; the initial view stays `globe`. Hiding `enableViewSwitcher` allows externally controlled view changes. Disabling the list while it is active returns to the globe.
+
+The shared `Talks` props below apply, except `views` and `enabledViews`, which `Wanderer` manages. `defaultView` defaults to `globe`, `viewHeadings` to `visually-hidden`, and the search, filters and count controls to off. A `responsive` choice can select the list only when `enableList` is true. Plugins can contribute filters, actions, renderers and slots; custom view registries belong in `Talks`.
+
+Use `globe` for `intro`, `autoRotate`, `presentation`, `label`, `heading` and `order`. Fullscreen presentation requires `enableList` so there is an inline view to exit to. The default is inline. Core and sidebox layouts both respect container width, RTL and milestone callout measurements.
+
+The existing `Talks`, `GlobeView` and `globeView()` defaults remain compatible with earlier integrations. In those lower-level APIs, toolbar controls and the sidebox remain on; `globeView({ enableSidebox: false, enableHint: false })` disables its additions. The globe fallback offers the list only when it is enabled, and its message never refers to a disabled list.
+
+## Talks API
+
 Every option of `<Talks>` from `@wanderer/talks`. Types come from `TalksProps` in the package declarations. Defaults are the values the component applies when the prop is omitted.
 
 ## Props
@@ -51,6 +75,10 @@ Every option of `<Talks>` from `@wanderer/talks`. Types come from `TalksProps` i
 An active id that no offered filter matches (a built-in left out of `builtinFilters`, a filter whose plugin is not registered, a typo) is kept in the state and in `onFiltersChange` payloads but has no effect: it filters nothing, presses no chip and does not count as an active filter for the reset button or the announcement. Offer every id you restore from a URL.
 | `onFiltersChange` | `(filters: readonly FilterId[]) => void` | `undefined` | Fires on every change in both modes. |
 | `builtinFilters` | `readonly BuiltinFilterId[]` | `['recording', 'upcoming']` | Which built-in chips to offer, from `recording`, `upcoming`, `online`, `in-person`, `hybrid`. Unknown ids are ignored and duplicates collapse. Chips render in order `recording` (0), `upcoming` (1), `online` (2), `in-person` (3), `hybrid` (4), interleaved with plugin filters by `order`. |
+| `enableSearch` | `boolean` | `true` | Show the search field. |
+| `enableFilters` | `boolean` | `true` | Show the filter controls. |
+| `enableResultCount` | `boolean` | `true` | Show the result count and reset control. |
+| `enableViewSwitcher` | `boolean` | `true` | Show view buttons when multiple views are enabled. |
 | `grouping` | `'separate' \| 'duplicate' \| 'none'` | `'separate'` | See [Grouping modes](#grouping-modes). |
 
 ### Presentation
@@ -226,6 +254,7 @@ Every string and label other than formatted dates is a key of `TalksCopy`. Pass 
 | `noMatchesDescription` | `Try a different search or clear the filters.` |
 | `loadingGlobe` | `Loading the globe` |
 | `globeUnavailable` | `The globe could not be shown` |
+| `globeUnavailableStandaloneDescription` | `Your browser may not support WebGL, or the globe module failed to load.` |
 | `globeUnavailableDescription` | `Your browser may not support WebGL, or the globe module failed to load. Everything is in the list.` |
 | `noMappedTalks` | `No talks on the map` |
 | `noMappedDescription` | `Add coordinates to talks, or supply a coordinate resolver, to place them on the globe.` |

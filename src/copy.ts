@@ -29,6 +29,7 @@ export function createDefaultCopy(): TalksCopy {
     noMatchesDescription: 'Try a different search or clear the filters.',
     loadingGlobe: 'Loading the globe',
     globeUnavailable: 'The globe could not be shown',
+    globeUnavailableStandaloneDescription: 'Your browser may not support WebGL, or the globe module failed to load.',
     globeUnavailableDescription: 'Your browser may not support WebGL, or the globe module failed to load. Everything is in the list.',
     noMappedTalks: 'No talks on the map',
     noMappedDescription: 'Add coordinates to talks, or supply a coordinate resolver, to place them on the globe.',

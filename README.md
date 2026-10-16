@@ -1,19 +1,17 @@
 # @wanderer/talks
 
-Plugin-based React components and pure helpers for publishing a speaking history. It ships a list view with search, filters and upcoming grouping, an optional 3D globe, a typed link model, and a plugin contract for custom views, filters, actions, renderers and slots. It is framework-agnostic React: no Next.js, no router, no speaker data, no branding.
+A React globe with milestone callouts. Start with the globe, then opt into a location sidebox, a list view, search, filters or a result count as your page needs them. Framework-agnostic, with no router, speaker data or branding built in.
 
 ## Features
 
-- Portable `Talk` schema with a validator (`strict` or `lenient`) that never mutates your data.
-- List view grouped into Upcoming, years and Undated, with search, filter chips, result count and reset.
-- Optional globe view: lazy-loaded WebGL renderer built on `cobe` with a particle intro, hover tooltips and milestone callouts, keyboard-accessible region and location lists, and fallbacks when WebGL or the module is unavailable.
-- Typed links (`event`, `recording`, `slides`, `detail`, `general`) with unsafe-scheme rejection, per-kind target and rel policies, a primary link, and derived actions.
-- Plugins: views, filters, actions, renderers and slots, registered per instance with deterministic ordering and no global state.
-- Responsive view selection that renders on the server without hydration warnings.
-- Controlled or uncontrolled view, search and filters.
-- Theming through `--wanderer-*` custom properties: light, dark and system palettes, RTL, reduced motion and forced colors.
-- Every visible string and accessible label is replaceable through `copy`; dates, including year headings, follow `locale`.
-- Upcoming grouping uses the `referenceDate` you supply, never the current date. The globe uses an animation clock only.
+- `Wanderer`: a globe and milestones by default, with independent `enable*` additions.
+- Milestones can reference talks or use their own coordinates, including without any talks.
+- Lazy WebGL rendering through `cobe`, accessible milestone selection, motion controls and reduced motion support.
+- Optional sidebox with region statistics and expandable locations; optional list view with upcoming grouping.
+- Optional search, filters, result counts and custom plugin contributions.
+- Typed links, safe URL handling, validation, localization and CSS theme tokens.
+- SSR and hydration support, with ESM, CommonJS and TypeScript declarations.
+- The existing `Talks` composition remains available for list-first pages and custom view registries.
 
 ## Installation
 
@@ -46,7 +44,7 @@ The published code runs on Node 20 or later (server rendering, build tools and d
 
 ```tsx
 import '@wanderer/talks/styles.css';
-import { Talks } from '@wanderer/talks';
+import { Wanderer } from '@wanderer/talks/globe';
 
 const talks = [
   {
@@ -64,11 +62,42 @@ const talks = [
 ];
 
 export function Page() {
-  return <Talks talks={talks} referenceDate="2026-10-13" />;
+  return (
+    <Wanderer
+      talks={talks}
+      milestones={[{ id: 'first-stage', talkId: talks[0].id, title: 'My first conference talk' }]}
+    />
+  );
 }
 ```
 
-`referenceDate` is an ISO calendar date (`YYYY-MM-DD`). Talks on or after it count as upcoming. Without it nothing is upcoming.
+The default renders the globe and its milestone controls. There is no search bar, filter row, count, sidebox or list switcher until you enable one.
+
+```tsx
+import { Wanderer } from '@wanderer/talks/globe';
+
+// A milestone-only journey does not need a talks array.
+<Wanderer milestones={[{ id: 'first-trip', title: 'First trip', coordinates: [35.68, 139.69] }]} />;
+
+// Add just the sidebox to your existing globe.
+<Wanderer talks={talks} milestones={milestones} enableSidebox />;
+
+// Add controls independently.
+<Wanderer talks={talks} milestones={milestones} enableSearch enableFilters enableList />;
+```
+
+| Addition | Default | Enables |
+|---|---|---|
+| `enableSidebox` | `false` | Region statistics, expandable locations and mapped summary. |
+| `enableList` | `false` | List view and globe/list switcher. The globe still opens first. |
+| `enableSearch` | `false` | Search input. |
+| `enableFilters` | `false` | Filter buttons, including plugin filters. |
+| `enableResultCount` | `false` | Result count and reset control. |
+| `enableHint` | `false` | Drag and hover hint. |
+
+Additions can be toggled without rebuilding the globe or losing a selected milestone. `enableViewSwitcher={false}` hides the buttons if you control the view externally. Search and filters can also be controlled externally while their UI is hidden. Pass `referenceDate` as `YYYY-MM-DD` to classify upcoming talks; without it nothing is upcoming.
+
+`globe={{ intro: false, autoRotate: false }}` customizes motion. The remaining shared props cover theme tokens, copy, navigation, images, validation and plugin slots. See [configuration](docs/configuration.md).
 
 ## Entry points
 
@@ -77,7 +106,7 @@ export function Page() {
 | `@wanderer/talks` | `Talks`, `DEFAULT_BREAKPOINT`, `useTalks`, `createDefaultCopy`, `mergeCopy`, `definePlugin`, the list pieces (`ListView`, `listView`, `TalkGroupSection`, `EmptyState`, `TalkCard`, `Toolbar`, `Heading`, `TalkLinkAnchor`, `resolveLinkPolicy`, `ErrorBoundary`), the hooks (`useMediaQuery`, `useColorScheme`, `usePrefersReducedMotion`, `useIsClient`, `useControllable`), everything from `./helpers`, and every component type. |
 | `@wanderer/talks/helpers` | Pure functions, no `"use client"`: `DEFAULT_BREAKPOINT`, `validateTalks`, `filterTalks`, `groupTalks`, `sortTalks`, `parseCalendarDate`, `formatCalendarDate`, `isUpcoming`, `classifyTalkDate`, `talkYear`, `normalizeSearch`, `safeUrl`, `getTalkLinks`, `getPrimaryLink`, `DEFAULT_PRIMARY_LINK_PRECEDENCE`, `locationLabel`, `locationParts`, `validCoordinates`, `resolveTalkCoordinates`, `geographicDistanceKm`, `deriveGeography`, `compareIds`, `definePlugin`, `registerPlugins`, `collectContributions`, plus the schema types (`Talk`, `TalkLink`, `LinkKind`, `ValidationResult`, `Geography`, and so on). |
 | `@wanderer/talks/list` | `ListView`, `listView`, `TalkCard`, `Toolbar`, `TalkGroupSection`, `EmptyState`, `TalkLinkAnchor`, `resolveLinkPolicy`, `Heading`, and the types `TalkViewProps`, `TalkRendererProps`, `ViewContribution`, `TalksContext`, `EmptyStateProps`, `ToolbarProps`, `TalkLinkAnchorProps`, `HeadingProps`. |
-| `@wanderer/talks/globe` | `GlobeView`, `globeView(options)`, `preloadGlobeView`, `GlobeRegionList`, and the types `GlobeViewOptions`, `GlobeViewProps`, `GlobeColors`, `GlobeRendererProps`, `PositionedMilestone`, `Rgb`. |
+| `@wanderer/talks/globe` | `Wanderer`, `WandererProps`, `GlobeView`, `globeView(options)`, `preloadGlobeView`, `GlobeRegionList`, and the types `GlobeViewOptions`, `GlobeViewProps`, `GlobeColors`, `GlobeRendererProps`, `PositionedMilestone`, `Rgb`. |
 | `@wanderer/talks/styles.css` | The stylesheet. Component styles are scoped to `.wanderer`; one `html:has()` rule locks scrolling while a Wanderer fullscreen dialog is open. |
 
 `definePlugin` is exported from the root entry and from `./helpers`. It is an identity function typed `<T extends TalksPlugin>(plugin: T) => T`, so an unannotated literal gets contextual types for its callbacks.
@@ -89,11 +118,13 @@ export function Page() {
 | Server Components, Node scripts, build steps, tests of data | `@wanderer/talks/helpers` |
 | A client component that renders the component | `@wanderer/talks` |
 | Custom composition of the list pieces (your own view or renderer) | `@wanderer/talks/list` |
-| The globe view | `@wanderer/talks/globe` |
+| The globe and milestones (recommended) | `@wanderer/talks/globe` |
 
 List-only consumers never import `@wanderer/talks/globe`, so `cobe` and the WebGL renderer stay out of their bundle.
 
-## Quick examples
+## Advanced Talks composition examples
+
+These examples retain the list-first `Talks` API. Use `Wanderer` above for a globe with opt-in additions.
 
 ### Vite (client only)
 
@@ -266,7 +297,7 @@ npx playwright install chromium
 npm run test:browser           # layout, focus, filters, WebGL fallback and axe
 ```
 
-CI runs all four suites. Browser artifacts include traces on failure and milestone screenshots at 390, 768, 1366 and 1920 pixels. `test:package` enforces minified gzip budgets of 18 kB for the list and 30 kB for the globe including cobe, excluding React in both. `verify:dist` separately reports unminified module graph sizes.
+CI runs all four suites. Browser artifacts include traces on failure and milestone screenshots at 390, 768, 1366 and 1920 pixels. `test:package` enforces minified gzip budgets of 18 kB for the list and 30 kB for the globe view including cobe, and 34 kB for the complete Wanderer component including its shell and cobe. React is excluded in each budget. `verify:dist` separately reports unminified module graph sizes.
 
 ## License
 

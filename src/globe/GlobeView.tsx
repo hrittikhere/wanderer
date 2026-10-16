@@ -220,6 +220,10 @@ function useOnScreen(ref: RefObject<Element | null>): boolean {
 }
 
 export interface GlobeViewOptions {
+  /** Include the regions, locations and summary sidebox. Default true for legacy globeView composition. */
+  enableSidebox?: boolean;
+  /** Show the drag and hover hint. Default true for legacy globeView composition. */
+  enableHint?: boolean;
   /** `inline` sits in page flow; `immersive` opens a fullscreen dialog including navigation. */
   presentation?: 'inline' | 'immersive';
   /** Play the particle intro on first mount (skipped under reduced motion). Default true. */
@@ -352,7 +356,7 @@ function GlobeFallback({ kind, context }: { kind: GlobeErrorKind | 'empty'; cont
   if (kind === 'empty') {
     return <EmptyState icon={<GlobeIcon width={28} height={28} />} title={copy.noMappedTalks} description={copy.noMappedDescription} action={action} />;
   }
-  return <EmptyState icon={<GlobeIcon width={28} height={28} />} title={copy.globeUnavailable} description={copy.globeUnavailableDescription} action={action} />;
+  return <EmptyState icon={<GlobeIcon width={28} height={28} />} title={copy.globeUnavailable} description={hasList ? copy.globeUnavailableDescription : copy.globeUnavailableStandaloneDescription} action={action} />;
 }
 
 export interface GlobeViewProps extends TalkViewProps {
@@ -386,12 +390,28 @@ export function GlobeView({ context, active, options = NO_OPTIONS, presentation:
   const presentation = shellPresentation ?? options.presentation ?? 'inline';
   const headingId = useId();
 
-  const hasMarkers = geography.markers.length > 0;
+  const positionedMilestones = useMemo<PositionedMilestone[]>(() => {
+    const byId = new Map<string, Talk>(geography.mappedTalks.map((talk) => [talk.id, talk]));
+    // Milestone ids key the select options, dots and the tracker: a repeated id keeps its first milestone.
+    const seen = new Set<string>();
+    return milestones.flatMap((milestone) => {
+      if (seen.has(milestone.id)) return [];
+      seen.add(milestone.id);
+      const talk = milestone.talkId ? byId.get(milestone.talkId) : undefined;
+      // Explicit coordinates are checked like a talk's: a non-finite or out-of-range pair falls back to the talk, or drops the milestone.
+      const coordinates = validCoordinates(milestone.coordinates)
+        ? milestone.coordinates
+        : talk ? resolveTalkCoordinates(talk, context.geographyOptions) : undefined;
+      return coordinates ? [{ ...milestone, coordinates }] : [];
+    });
+  }, [milestones, geography.mappedTalks, context.geographyOptions]);
+
+  const hasContent = geography.markers.length > 0 || positionedMilestones.length > 0;
   const webGlRef = useRef<boolean | null>(null);
   const rendererRef = useRef(Renderer);
   rendererRef.current = Renderer;
   useEffect(() => {
-    if (!isClient || !active || !hasMarkers) return;
+    if (!isClient || !active || !hasContent) return;
     // Markers refilling after an empty result: the renderer is already loaded, so mount it again without a loading pass.
     if (webGlRef.current && rendererRef.current) {
       setErrorKind(null);
@@ -418,23 +438,7 @@ export function GlobeView({ context, active, options = NO_OPTIONS, presentation:
       setStatus('error');
     });
     return () => { cancelled = true; };
-  }, [isClient, active, hasMarkers]);
-
-  const positionedMilestones = useMemo<PositionedMilestone[]>(() => {
-    const byId = new Map<string, Talk>(geography.mappedTalks.map((talk) => [talk.id, talk]));
-    // Milestone ids key the select options, dots and the tracker: a repeated id keeps its first milestone.
-    const seen = new Set<string>();
-    return milestones.flatMap((milestone) => {
-      if (seen.has(milestone.id)) return [];
-      seen.add(milestone.id);
-      const talk = milestone.talkId ? byId.get(milestone.talkId) : undefined;
-      // Explicit coordinates are checked like a talk's: a non-finite or out-of-range pair falls back to the talk, or drops the milestone.
-      const coordinates = validCoordinates(milestone.coordinates)
-        ? milestone.coordinates
-        : talk ? resolveTalkCoordinates(talk, context.geographyOptions) : undefined;
-      return coordinates ? [{ ...milestone, coordinates }] : [];
-    });
-  }, [milestones, geography.mappedTalks, context.geographyOptions]);
+  }, [isClient, active, hasContent]);
 
   const activeMilestone = positionedMilestones.find((milestone) => milestone.id === activeMilestoneId) ?? null;
   const OverlayCard = slots.GlobeOverlayCard;
@@ -482,8 +486,8 @@ export function GlobeView({ context, active, options = NO_OPTIONS, presentation:
   useEffect(() => clearContextTimer, [clearContextTimer]);
 
   // The renderer is the only thing that activates milestones; when it is gone
-  // (no mapped talks, an error) the callout must go with it.
-  const rendererShown = isClient && hasMarkers && status === 'ready' && Renderer !== null;
+  // (no positioned content, an error) the callout must go with it.
+  const rendererShown = isClient && hasContent && status === 'ready' && Renderer !== null;
   const calloutRef = useRef<HTMLDivElement>(null);
   const calloutAnchor = useCalloutAnchor(calloutRef, calloutPlacement === 'beside' && rendererShown, activeMilestone?.id, context.direction);
   useEffect(() => {
@@ -494,10 +498,10 @@ export function GlobeView({ context, active, options = NO_OPTIONS, presentation:
     clearContextTimer();
   }, [rendererShown, clearContextTimer]);
   // The fallbacks replace the canvas, so its drag and hover hint would describe nothing.
-  const canDraw = hasMarkers && status !== 'error';
+  const canDraw = hasContent && status !== 'error';
 
   let stage: ReactNode;
-  if (isClient && !hasMarkers) {
+  if (isClient && !hasContent) {
     // Nothing to draw: say so without fetching the renderer or cobe.
     stage = <GlobeFallback kind="empty" context={context} />;
   } else if (status === 'error') {
@@ -560,7 +564,7 @@ export function GlobeView({ context, active, options = NO_OPTIONS, presentation:
 
   return (
     <div
-      className={`wanderer-globe wanderer-globe--${presentation}`}
+      className={`wanderer-globe wanderer-globe--${presentation}${options.enableSidebox === false ? ' wanderer-globe--core' : ''}`}
       data-wanderer-globe-status={status}
       data-wanderer-globe-error={errorKind ?? undefined}
     >
@@ -578,7 +582,7 @@ export function GlobeView({ context, active, options = NO_OPTIONS, presentation:
             {stage}
             {calloutPlacement === 'beside' && callout}
           </div>
-          {canDraw && <p className="wanderer-globe__hint">{copy.globeHint}</p>}
+          {canDraw && options.enableHint !== false && <p className="wanderer-globe__hint">{copy.globeHint}</p>}
           {rendererShown && (
             <div className="wanderer-globe__controls">
               {!reducedMotion && <button type="button" className="wanderer-button" onClick={() => setMotionPaused(!motionPaused)}>{motionPaused ? copy.resumeGlobe : copy.pauseGlobe}</button>}
@@ -615,14 +619,14 @@ export function GlobeView({ context, active, options = NO_OPTIONS, presentation:
             </div>
           )}
         </div>
-        <aside className="wanderer-globe__panel" aria-labelledby={headingId}>
+        {options.enableSidebox !== false && <aside className="wanderer-globe__panel" aria-labelledby={headingId}>
           <Heading level={context.headingLevel + 1} id={headingId} className="wanderer-visually-hidden">{copy.globePanelLabel}</Heading>
           <div className="wanderer-globe__panel-scroll">
             <GlobeRegionList context={context} geography={geography} expanded={expandedMarker} onToggle={setExpandedMarker} />
             {GlobeAside && <GlobeAside context={context} geography={geography} />}
           </div>
           <p className="wanderer-globe__summary">{copy.mappedCount(geography.mappedCount, geography.markers.length)}</p>
-        </aside>
+        </aside>}
       </div>
     </div>
   );
@@ -635,8 +639,8 @@ export function GlobeView({ context, active, options = NO_OPTIONS, presentation:
  */
 const viewComponents = new Map<string, ComponentType<TalkViewProps>>();
 function globeViewComponent(options: GlobeViewOptions): ComponentType<TalkViewProps> {
-  const behavior: GlobeViewOptions = { presentation: options.presentation, intro: options.intro, autoRotate: options.autoRotate };
-  const key = `${behavior.presentation}|${behavior.intro}|${behavior.autoRotate}`;
+  const behavior: GlobeViewOptions = { presentation: options.presentation, intro: options.intro, autoRotate: options.autoRotate, enableSidebox: options.enableSidebox, enableHint: options.enableHint };
+  const key = `${behavior.presentation}|${behavior.intro}|${behavior.autoRotate}|${behavior.enableSidebox}|${behavior.enableHint}`;
   let Component = viewComponents.get(key);
   if (!Component) {
     Component = function GlobeViewWithOptions(props: TalkViewProps) { return <GlobeView {...props} options={behavior} />; };
