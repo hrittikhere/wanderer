@@ -1,6 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+function withAdditions(path: string): string {
+  return `${path}${path.includes('?') ? '&' : '?'}demo=all`;
+}
+
 // Controls transition their colors, so axe can sample a pressed button midway
 // between its light and dark states. Let CSS transitions finish first.
 async function axeViolations(page: Page) {
@@ -9,7 +13,7 @@ async function axeViolations(page: Page) {
 }
 
 test('the real WebGL shader has finite uniforms and draws a visible globe', async ({ page }) => {
-  await page.goto('/?presentation=immersive');
+  await page.goto(withAdditions('/?presentation=immersive'));
   await page.getByRole('button', { name: 'Globe', exact: true }).click();
   const canvas = page.locator('canvas.wanderer-globe__canvas');
   await expect(canvas).toBeVisible();
@@ -47,7 +51,7 @@ test('the real WebGL shader has finite uniforms and draws a visible globe', asyn
 test('search, workshop and upcoming filters combine and reset', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/');
+  await page.goto(withAdditions('/'));
   await page.getByRole('searchbox', { name: 'Search talks' }).fill('platforms');
   await expect(page.locator('.wanderer-talk')).toHaveCount(3);
   await page.getByRole('button', { name: 'Workshops', exact: true }).click();
@@ -63,7 +67,7 @@ for (const width of [390, 768, 1366, 1920]) {
   test(`milestone stays clear of the globe at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/');
+    await page.goto(withAdditions('/'));
     await page.getByRole('button', { name: 'Globe', exact: true }).click();
     await expect(page.locator('.wanderer-globe')).toHaveAttribute('data-wanderer-globe-status', 'ready');
     await page.getByRole('combobox', { name: 'Milestones', exact: true }).selectOption('first-stage');
@@ -91,7 +95,7 @@ for (const dir of ['ltr', 'rtl']) {
     // Wide enough that the fullscreen callout fits beside the stage, which draws connectors.
     await page.setViewportSize({ width: 2000, height: 1100 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto(`/?presentation=immersive&dir=${dir}`);
+    await page.goto(withAdditions(`/?presentation=immersive&dir=${dir}`));
     await page.getByRole('button', { name: 'Globe', exact: true }).click();
     await expect(page.locator('.wanderer-globe')).toHaveAttribute('data-wanderer-globe-status', 'ready');
     await page.getByRole('combobox', { name: 'Milestones', exact: true }).selectOption('first-stage');
@@ -116,7 +120,7 @@ for (const dir of ['ltr', 'rtl']) {
 }
 
 test('fullscreen keeps search, focus and exit inside the dialog', async ({ page }) => {
-  await page.goto('/?presentation=immersive');
+  await page.goto(withAdditions('/?presentation=immersive'));
   await page.getByRole('button', { name: 'Globe', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Talks on the map' });
   await expect(dialog).toBeVisible();
@@ -146,7 +150,7 @@ test('without WebGL, locations and the return to list stay usable', async ({ pag
       return original.call(this, kind as '2d', ...rest);
     } as typeof original;
   });
-  await page.goto('/');
+  await page.goto(withAdditions('/'));
   await page.getByRole('button', { name: 'Globe', exact: true }).click();
   await expect(page.getByText('The globe could not be shown', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /Lisbon, Portugal/ }).click();
@@ -157,7 +161,7 @@ test('without WebGL, locations and the return to list stay usable', async ({ pag
 
 for (const theme of ['light', 'dark']) {
   test(`list and fullscreen pass axe in ${theme} with RTL`, async ({ page }) => {
-    await page.goto(`/?presentation=immersive&dir=rtl&theme=${theme}`);
+    await page.goto(withAdditions(`/?presentation=immersive&dir=rtl&theme=${theme}`));
     expect(await axeViolations(page)).toEqual([]);
     await page.getByRole('button', { name: 'Globe', exact: true }).click();
     await expect(page.locator('.wanderer-globe')).toHaveAttribute('data-wanderer-globe-status', 'ready');
@@ -168,7 +172,7 @@ for (const theme of ['light', 'dark']) {
 
 test('?theme=system follows the OS preference in the component and the page around it', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.goto('/?theme=system');
+  await page.goto(withAdditions('/?theme=system'));
   await expect(page.getByRole('combobox', { name: 'Appearance' })).toHaveValue('system');
   await expect(page.locator('.wanderer')).toHaveAttribute('data-wanderer-theme', 'system');
   const style = (selector: string, property: 'backgroundColor' | 'borderTopColor') => page.locator(selector).evaluate((element, name) => getComputedStyle(element)[name], property);
@@ -182,7 +186,7 @@ test('switching views and searching never exhausts the per-page WebGL context li
   const problems: string[] = [];
   page.on('console', (message) => { if (/too many active webgl contexts|context (?:was )?lost|CONTEXT_LOST/i.test(message.text())) problems.push(message.text()); });
   page.on('pageerror', (error) => problems.push(error.message));
-  await page.goto('/');
+  await page.goto(withAdditions('/'));
   const search = page.getByRole('searchbox', { name: 'Search talks' });
   // Chrome keeps 16 live contexts per page and drops the oldest past that; each round mounts a renderer.
   for (let round = 0; round < 20; round += 1) {
@@ -204,7 +208,7 @@ test('switching views and searching never exhausts the per-page WebGL context li
 });
 
 test('a browser-forced close of the fullscreen dialog returns to the inline list instead of hiding the component', async ({ page }) => {
-  await page.goto('/?presentation=immersive&escape=false');
+  await page.goto(withAdditions('/?presentation=immersive&escape=false'));
   await page.getByRole('button', { name: 'Globe', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Talks on the map' });
   await expect(dialog).toBeVisible();
@@ -225,7 +229,7 @@ test('a browser-forced close of the fullscreen dialog returns to the inline list
 
 test('the responsive default shows an immersive globe inline; choosing it opens fullscreen', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/?presentation=immersive&responsive=1');
+  await page.goto(withAdditions('/?presentation=immersive&responsive=1'));
   await expect(page.locator('.wanderer')).toHaveAttribute('data-wanderer-view', 'globe');
   await expect(page.locator('.wanderer-globe')).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -238,7 +242,7 @@ test('the responsive default shows an immersive globe inline; choosing it opens 
 });
 
 test('the inline globe with an open location and the no-WebGL fallback pass axe', async ({ page }) => {
-  await page.goto('/');
+  await page.goto(withAdditions('/'));
   await page.getByRole('button', { name: 'Globe', exact: true }).click();
   await expect(page.locator('.wanderer-globe')).toHaveAttribute('data-wanderer-globe-status', 'ready');
   await page.getByRole('button', { name: /Lisbon, Portugal/ }).click();

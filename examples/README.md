@@ -21,3 +21,6 @@ npm --prefix examples/next run dev
 Its server page validates data, computes the reference date in a `'use cache'` scope (enabled by `cacheComponents: true` in `next.config.ts`, as the README pattern requires) and hands serializable props to a client adapter containing the globe and Next Link integration. Rebuild the library after changing `src/`.
 
 `npm run test:package` installs a packed tarball into isolated copies of both apps, then builds them; the fixtures are removed after a passing run (set `WANDERER_KEEP_FIXTURES=1` to keep them). It also bundles a list-only consumer with no `cobe` installed. `npm run test:browser` runs the Vite app in Chromium; install the browser first with `npx playwright install chromium`.
+
+
+Both examples now start with `Wanderer`, showing the globe and milestones with additions off. The Vite page exposes independent Enable sidebox, list view, search, filters, result count and globe hint checkboxes. `?demo=all` opens the fully composed demo used by the existing browser suite; the default route demonstrates the minimal core. The Next.js example uses the same minimal core through a client adapter.

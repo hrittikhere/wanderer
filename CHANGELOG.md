@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add `Wanderer` from `@wanderer/talks/globe`: a globe and milestones with independent opt-in sidebox, list, search, filters, result count and hint.
+- Keep the globe canvas and milestone selection mounted while additions are toggled.
+- Render positioned milestones without requiring mapped talks.
+- Add a standalone WebGL fallback message without references to a disabled list.
+- Preserve the existing `Talks` and `globeView()` defaults.
 - Milestone connectors beside the globe now end at the card. The connector SVG kept its intrinsic 300x150 size, so the line pointed away from the callout; it now fills the stage, and the anchor is measured from the card below the dismiss button (mirrored in RTL).
 - Replacing a sparse talks array with populated data now recomputes validation and results; empty slots no longer make shallow comparison retain stale input.
 - Reject empty slots in plugin and contribution arrays with the same diagnostic as explicit `undefined` entries, including contributions that flattening previously discarded.

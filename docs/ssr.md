@@ -27,7 +27,7 @@ Which modules carry `"use client"`:
 
 `resolveLinkPolicy` is a plain function, but it lives in the same module as `TalkLinkAnchor`, which carries `"use client"`, so importing it into a Server Component makes it a client reference. Resolve policies in a client module. `DEFAULT_BREAKPOINT` lives in the helpers module, so a Server Component can import it from either entry and compute with it.
 
-The build transpiles file by file, so each module's directive survives and bundlers that understand `"use client"` treat `Talks` as a client reference automatically. A Server Component may import and render `<Talks>` directly as long as every prop is serializable. These props are plain data: `talks`, `referenceDate`, `copy` without function keys, `locale`, `dateFormat`, `direction`, `theme`, `tokens`, `className`, `style`, `density`, `headingLevel`, `viewHeadings`, `defaultView`, `enabledViews`, `responsive`, `view`, `search`, `defaultSearch`, `filters`, `defaultFilters`, `builtinFilters`, `grouping`, `geography` without `resolveCoordinates` or `assignRegion`, `milestones` (images included), `escapeToList`, `trackpadGestures` and `validation`.
+The build transpiles file by file, so each module's directive survives and bundlers that understand `"use client"` treat `Talks` as a client reference automatically. A Server Component may import and render `<Talks>` directly as long as every prop is serializable. These props are plain data: `talks`, `referenceDate`, `copy` without function keys, `locale`, `dateFormat`, `direction`, `theme`, `tokens`, `className`, `style`, `density`, `headingLevel`, `viewHeadings`, `defaultView`, `enabledViews`, `responsive`, `view`, `search`, `defaultSearch`, `filters`, `defaultFilters`, `builtinFilters`, `enableSearch`, `enableFilters`, `enableResultCount`, `enableViewSwitcher`, `grouping`, `geography` without `resolveCoordinates` or `assignRegion`, `milestones` (images included), `escapeToList`, `trackpadGestures` and `validation`.
 
 The rest hold functions or components and cannot cross the boundary: `plugins`, `views`, `slots`, `navigation`, `ImageComponent`, `geography.resolveCoordinates` and `geography.assignRegion`, `onViewChange`, `onSearchChange`, `onFiltersChange`, `onValidation`, `isModalOpen`, and function-valued `copy` keys. A controlled `view`, `search` or `filters` stays fixed without its change callback, so a page whose visitors change them controls them from a client component. Put these in a client adapter:
 
@@ -54,12 +54,18 @@ The library never calls `Date.now()`. Supply `referenceDate` as `YYYY-MM-DD`:
 - Next.js with Cache Components (`cacheComponents: true` in `next.config.ts`; `'use cache'` does not compile without it): compute it inside a `'use cache'` function with `cacheLife('hours')` and pass the string down. The value is pinned when the cache entry fills and refreshes on revalidation, so upcoming and past are consistent between the HTML and the client without hydration mismatches.
 - Static exports: the build-time value is used until the next build. If that is too stale, keep `referenceDate` out of the server render and set it in an effect on the client; talks then render as past first and reflow to upcoming after mount.
 
+## Wanderer boundaries
+
+`Wanderer` from `@wanderer/talks/globe` carries its own `"use client"` boundary and manages globe registration internally. It can be rendered directly by a Server Component with serializable props, including `enableSidebox`, `enableList`, `enableSearch`, `enableFilters`, `enableResultCount`, `enableViewSwitcher`, `enableHint` and `globe`. It does not need component-valued `views`. Callbacks, plugins, custom images and slots still belong in a client adapter. Its default server markup is a globe loading state without a toolbar or sidebox, matching the first hydration render.
+
 ## Lazy globe loading
 
 `globeView(options)` returns a `ViewContribution` with id `globe`. Pass it through `views`; importing the globe entry registers nothing by itself. Every option is optional:
 
 | Option | Default | Behavior |
 |---|---|---|
+| `enableSidebox` | `true` | Include region statistics, locations and summary. `Wanderer` defaults this to false. |
+| `enableHint` | `true` | Show the drag and hover hint. `Wanderer` defaults this to false. |
 | `presentation` | `'inline'` | `'immersive'` opens the view in a fullscreen dialog with the toolbar and heading; see [styling.md](styling.md#fullscreen-integration). |
 | `intro` | `true` | Plays the particle intro on first mount. It is always skipped under reduced motion. |
 | `autoRotate` | `true` | Rotates the globe slowly while idle. Always off under reduced motion. |
@@ -67,20 +73,20 @@ The library never calls `Date.now()`. Supply `referenceDate` as `YYYY-MM-DD`:
 | `heading` | `copy.globeHeading` | Heading rendered above the view. |
 | `order` | `10` | Sort order among views; the built-in list has 0. |
 
-`globeView()` returns the same component for equal `presentation`, `intro` and `autoRotate`, so an inline call in `views` does not remount the globe.
+`globeView()` returns the same component for equal `presentation`, `intro`, `autoRotate`, `enableSidebox` and `enableHint`, so an inline call in `views` does not remount the globe.
 
 Loading sequence inside `GlobeView`:
 
 1. On the server and during hydration the view renders its panel (region and location lists, summary) and a loading disc with `copy.loadingGlobe` in a polite live region. `data-wanderer-globe-status="idle"`.
-2. After hydration, with zero markers (no mapped talks, or a filter that leaves none), the stage shows `copy.noMappedTalks` and `copy.noMappedDescription` with the list button at once. Status stays `idle`, no WebGL check runs and the renderer is never imported. The rest of the sequence applies only once at least one marker exists.
-3. When the view is `active` and has markers, status becomes `loading`. A WebGL check creates a canvas and asks for `webgl2`, `webgl`, then `experimental-webgl`.
+2. After hydration, with zero markers and zero positioned milestones, the stage shows `copy.noMappedTalks` and `copy.noMappedDescription` with the list button at once. Status stays `idle`, no WebGL check runs and the renderer is never imported. The rest of the sequence applies only once at least one marker or positioned milestone exists.
+3. When the view is `active` and has markers or positioned milestones, status becomes `loading`. A WebGL check creates a canvas and asks for `webgl2`, `webgl`, then `experimental-webgl`.
 4. **WebGL unavailable**: status `error`, `data-wanderer-globe-error="webgl"`. The stage shows `copy.globeUnavailable` and `copy.globeUnavailableDescription` with a button (`copy.useList`) that switches to the list view when one is registered.
 5. Otherwise the renderer module is imported dynamically. That module is the only file that imports `cobe`.
 6. **Module missing or failing** (for example a chunk fails to download): status `error`, `data-wanderer-globe-error="module"`, same fallback. The import promise is cleared so a later mount retries.
 7. **Module loaded**: status `ready`. The renderer mounts inside an error boundary.
 8. **Renderer throws at runtime**: the boundary shows the unavailable fallback and sets `data-wanderer-globe-error="runtime"`.
 
-If the markers drop to zero later (for example a filter removes every mapped talk), the stage switches to the no-mapped-talks state while the status attribute keeps its last value.
+If both markers and positioned milestones drop to zero later (for example a filter removes every mapped talk), the stage switches to the no-mapped-talks state while the status attribute keeps its last value.
 
 `preloadGlobeView()` starts the import early and resolves when it finishes. It is a no-op on the server. The view toggle calls it on pointer enter and focus through the contribution's `preload`. Call it yourself after the page is idle to warm the chunk:
 

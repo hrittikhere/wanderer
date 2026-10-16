@@ -51,7 +51,11 @@ assert.ok(listBytes < 18_000, `list gzip budget exceeded: ${listBytes} > 18000 b
 const globe = await build({ stdin: { contents: 'export { globeView } from "@wanderer/talks/globe";', resolveDir: path.join(destination, 'vite') }, bundle: true, format: 'esm', platform: 'browser', minify: true, write: false, external: ['react', 'react-dom', 'react/jsx-runtime'] });
 const globeBytes = gzipSync(globe.outputFiles[0].contents).length;
 assert.ok(globeBytes < 30_000, `globe gzip budget exceeded: ${globeBytes} > 30000 bytes (cobe included, React excluded)`);
-console.log(`Packed list without cobe passed. Gzip sizes: list ${listBytes} B, globe with cobe ${globeBytes} B.`);
+// The complete component also includes the context/state shell; retain the existing view-only budget above.
+const wanderer = await build({ stdin: { contents: 'export { Wanderer } from "@wanderer/talks/globe";', resolveDir: path.join(destination, 'vite') }, bundle: true, format: 'esm', platform: 'browser', minify: true, write: false, external: ['react', 'react-dom', 'react/jsx-runtime'] });
+const wandererBytes = gzipSync(wanderer.outputFiles[0].contents).length;
+assert.ok(wandererBytes < 34_000, `Wanderer gzip budget exceeded: ${wandererBytes} > 34000 bytes (shell and cobe included, React excluded)`);
+console.log(`Packed list without cobe passed. Gzip sizes: list ${listBytes} B, globe view with cobe ${globeBytes} B, complete Wanderer ${wandererBytes} B.`);
 
 // TypeScript consumers: every entry's declarations must resolve and parse under
 // each module resolution mode a consumer may use. TypeScript 5.x is the oldest
@@ -67,10 +71,11 @@ run(['install', '--no-audit', '--no-fund'], typesDir);
 const consumerSource = `import { validateTalks, type Talk } from '@wanderer/talks/helpers';
 import { Talks, useTalks, type TalksProps } from '@wanderer/talks';
 import { ListView } from '@wanderer/talks/list';
-import { globeView, type GlobeViewOptions } from '@wanderer/talks/globe';
+import { Wanderer, type WandererProps, globeView, type GlobeViewOptions } from '@wanderer/talks/globe';
 const talks: Talk[] = validateTalks([]).talks;
 const props: TalksProps = { talks, views: [globeView({} satisfies GlobeViewOptions)] };
-export { props, Talks, useTalks, ListView };
+const globeProps: WandererProps = { milestones: [{ id: 'first', title: 'First', coordinates: [0, 0] }], enableSidebox: true, enableList: true, enableSearch: true };
+export { props, globeProps, Wanderer, Talks, useTalks, ListView };
 `;
 for (const file of ['consumer.ts', 'consumer.cts', 'consumer.mts']) await writeFile(path.join(typesDir, file), consumerSource);
 const tsc = path.join(typesDir, 'node_modules', 'typescript', 'bin', 'tsc');

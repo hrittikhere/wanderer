@@ -220,7 +220,8 @@ describe('the WebGL renderer under a fake GL context', () => {
   });
 
   test('the milestone callout disappears with the renderer and does not linger over the empty state', async () => {
-    const item = await mountGlobe({ milestones: [LISBON] });
+    // A talk-bound milestone leaves with its talk; explicit coordinates are an independent journey.
+    const item = await mountGlobe({ milestones: [{ id: 'lisbon', title: LISBON.title, talkId: 'beacon-2029' }] });
     const { gl } = item;
     await item.frame();
     // Reduced motion keeps automatic callouts off; the accessible selector

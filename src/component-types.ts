@@ -66,6 +66,8 @@ export interface TalksCopy {
   loadingGlobe: string;
   globeUnavailable: string;
   globeUnavailableDescription: string;
+  /** Unavailable message when the optional list view is disabled. */
+  globeUnavailableStandaloneDescription: string;
   noMappedTalks: string;
   noMappedDescription: string;
   useList: string;
@@ -392,6 +394,14 @@ export interface TalksProps {
   onFiltersChange?: (filters: readonly FilterId[]) => void;
   /** Built-in filters to offer. Default: recording and upcoming. */
   builtinFilters?: readonly BuiltinFilterId[];
+  /** Show the search input. Default true in Talks, false in Wanderer. State can still be controlled externally. */
+  enableSearch?: boolean;
+  /** Show filter controls. Default true in Talks, false in Wanderer. */
+  enableFilters?: boolean;
+  /** Show the result count and reset control. Default true in Talks, false in Wanderer. */
+  enableResultCount?: boolean;
+  /** Show view buttons when multiple views are enabled. Default true. */
+  enableViewSwitcher?: boolean;
   grouping?: GroupingMode;
   geography?: GeographyOptions;
   navigation?: NavigationOptions;

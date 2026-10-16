@@ -1187,6 +1187,16 @@
 
 }
 
+/* The core globe takes the full available column when no sidebox is enabled. */
+.wanderer-globe--core .wanderer-globe__layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.wanderer-globe--core .wanderer-globe__stage-wrap {
+  grid-column: 1;
+  grid-row: 1;
+}
+
 /* Measured free space determines placement, independently of viewport width.
    Tight layouts put the compact card in document flow below the globe. */
 .wanderer-globe__stage[data-wanderer-callout="beside"] .wanderer-globe__callout {
