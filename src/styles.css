@@ -1388,7 +1388,11 @@ html:has(.wanderer-shell--immersive[open]) body { overflow: hidden; }
   transition-duration: var(--wanderer-globe-reveal-duration, 920ms);
 }
 
+/* inset: 0 does not stretch a replaced element: without an explicit size the
+   SVG stays 300x150, and the percentage anchor misses the callout. */
 .wanderer-globe__connectors {
+  inline-size: 100%;
+  block-size: 100%;
   overflow: visible;
   color: var(--wanderer-globe-connector);
 }

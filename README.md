@@ -236,7 +236,6 @@ export function App() {
 - [docs/ssr.md](docs/ssr.md): server rendering, hydration, RSC boundaries, lazy globe loading.
 - [docs/links.md](docs/links.md): the link model, validation, navigation.
 - [docs/migration.md](docs/migration.md): moving from a site-specific talk shape.
-- [docs/review.md](docs/review.md): comparison findings, fixes and source-data integration notes.
 - [CHANGELOG.md](CHANGELOG.md)
 
 ## Compatibility
